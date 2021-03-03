@@ -1,0 +1,15 @@
+# Project requirements
+tomlkit
+
+# Sphinx docs
+#sphinx
+#sphinx-autobuild
+#sphinx_rtd_theme
+
+# Testing
+flake8
+pytest
+
+# Building
+bumpversion
+wheel

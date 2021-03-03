@@ -1,0 +1,46 @@
+# Cyra says hello
+msg = "Hello World"
+
+# SQL Database settings
+[DATABASE]
+# DB server IP address
+server = "192.168.1.1"
+# SQL port (default: 1443)
+port = 1443
+# Credentials
+username = "admin"
+password = "my_secret_password"
+
+# Servers to be monitored
+[SERVERS]
+    [SERVERS.alpha]
+    # Server IP address
+    ip = "10.0.0.1"
+    # Set to false to disable server access
+    enable = true
+    # Server priority
+    priority = 1
+    # Users to be handled
+    users = ["ThetaDev", "Cyra"]
+
+    [SERVERS.beta]
+    # Server IP address
+    ip = "10.0.0.2"
+    # Set to false to disable server access
+    enable = false
+    # Server priority
+    priority = 2
+    # Users to be handled
+    users = ["ThetaDev"]
+
+# Arbitrary dictionary
+[DICT]
+value1 = 'V1'
+value2 = 'V2'
+value3 = 3
+    [DICT.KeyA]
+    valueA1 = 'VA1'
+    valueA2 = true
+    [DICT.KeyB]
+    valueB1 = 'VB1'
+    valueB2 = ['VB2a', 'VB2b']
