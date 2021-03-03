@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import copy
+import tomlkit
 
 
 class DictUtil:
@@ -7,7 +8,7 @@ class DictUtil:
     def iterate(d: dict, fun):
         """
         Iterates through a nested dictionary, calling the function ``fun`` on every key/value.
-        :param d:
+        :param d: Dictionary
         :param fun: Function/Lambda ``fun(key, value)``
         """
         for key, value in d.items():
@@ -17,27 +18,61 @@ class DictUtil:
                 fun(key, value)
 
     @staticmethod
-    def remove(d: dict, cond):
+    def get_element(d: dict, path: tuple):
         """
-        Removes all elements from nested dictionary which match the ``cond`` condition.
+        Gets element from a nested dictionary
         :param d: Dictionary
-        :param cond: Function/Lambda ``cond(key, value) -> bool``
+        :param path: Path tuple (for example ``('DATABASE', 'server')`` or ``('msg',)``
+        :return: element or None
+        :raise ValueError: if Path is empty
         """
-        to_remove = []
-        for key, value in d.items():
-            if isinstance(value, dict):
-                DictUtil.remove(value, cond)
-            elif cond(key, value):
-                to_remove.append(key)
+        if len(path) == 0:
+            raise ValueError('Path length cant be 0')
+        elif len(path) == 1:
+            return d.get(path[0])
+        elif d.get(path[0]):
+            return DictUtil.get_element(d[path[0]], path[1:])
+        return None
 
-        for key in to_remove:
-            d.pop(key)
+    @staticmethod
+    def set_element(d: dict, path: tuple, value, default_dict=None):
+        """
+        Sets element in a nested dictionary, creating additional sub-dictionaries if necessary
+        :param d: Dictionary
+        :param path: Path tuple (for example ``('DATABASE', 'server')`` or ``('msg',)``
+        :param value: Value to be set
+        :param default_dict: Empty dictionary to be created if missing (default: ``dict()``)
+        :raise ValueError: if Path is empty
+        """
+        if default_dict is None:
+            default_dict = dict()
+
+        if len(path) == 0:
+            raise ValueError('Path length cant be 0')
+        elif len(path) == 1:
+            d[path[0]] = value
+        else:
+            DictUtil.set_element(d.setdefault(path[0], default_dict), path[1:], value, default_dict)
 
 
-class Value:
-    def __init__(self, default=''):
+class ConfigEntry:
+    def __init__(self, comment: str = ''):
+        self.comment = comment
+
+
+class ConfigValue(ConfigEntry):
+    def __init__(self, comment: str = '', default=''):
+        super().__init__(comment)
         self.default = default
-        self.value = default
+        self._value = default
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        self._value = type(self.default)(value)
 
     def __get__(self, instance, owner):
         return self.value
@@ -47,117 +82,120 @@ class Value:
 
 
 class Config:
-    def __init__(self, config: OrderedDict, comments: dict):
+    def __init__(self, config: OrderedDict):
         self._config = config
-        self._comments = comments
 
-    def get_comment(self, path):
-        return self._comments.get(tuple(path))
+    @staticmethod
+    def _set_toml_entry(toml, path, entry: ConfigEntry):
+        if len(path) == 0:
+            raise ValueError('Path length cant be 0')
+        elif len(path) == 1:
+            if isinstance(entry, ConfigValue):
+                toml.add(path[0], entry.value)
+            else:
+                toml.add(path[0], tomlkit.table())
+
+            if entry.comment:
+                toml[path[0]].comment(entry.comment)
+        else:
+            if path[0] not in toml:
+                toml.add(path[0], tomlkit.table())
+
+            Config._set_toml_entry(toml[path[0]], path[1:], entry)
 
     def to_toml(self):
-        import tomlkit
-
         toml = tomlkit.document()
-        Config._to_toml(self, toml, self._config)
+
+        for path, entry in self._config.items():
+            Config._set_toml_entry(toml, path, entry)
+
         return tomlkit.dumps(toml)
 
-    def _to_toml(self, toml, cfg_dict: OrderedDict, path=tuple()):
-        import tomlkit
+    def _load_dict(self, cfg_dict: dict, wb_fun=None):
+        n_writeback = 0
 
-        for key, value in cfg_dict.items():
-            if isinstance(value, OrderedDict):
-                table = tomlkit.table()
-                Config._to_toml(self, table, value, path + (key,))
-                toml.add(key, table)
-
-            elif isinstance(value, Value):
-                toml.add(key, value.default)
-            else:
+        for path in self._config.keys():
+            entry = self._config[path]
+            if not isinstance(entry, ConfigValue):
                 continue
 
-            cmt = self.get_comment(path + (key,))
-            if cmt:
-                toml[key].comment(cmt)
+            new_value = DictUtil.get_element(cfg_dict, path)
 
-            # elif key.startswith('_comment'):
-            #    toml.add(tomlkit.comment(value))
+            # Import value if present in config dict
+            if new_value:
+                entry.value = new_value
+
+            # Insert default value to config dict if value is not present there
+            elif callable(wb_fun):
+                wb_fun(path, entry)
+                n_writeback += 1
+        return n_writeback
+
+    def load_dict(self, cfg_dict: dict, writeback=False):
+        return self._load_dict(cfg_dict,
+                               lambda path, entry:
+                               DictUtil.set_element(cfg_dict, path, entry.default) if writeback else None)
+
+    def load_toml(self, toml_str: str, writeback=False):
+        toml = tomlkit.loads(toml_str)
+
+        n_writeback = self._load_dict(toml.value,
+                                      lambda path, entry:
+                                      Config._set_toml_entry(toml, path, entry) if writeback else None)
+
+        if n_writeback:
+            print('Inserted %d new items into config file' % n_writeback)
+            return tomlkit.dumps(toml)
+        return None
 
 
 class ConfigBuilder:
     def __init__(self):
+        # Config dict: Key(tuple) -> ConfigEntry
         self._config = OrderedDict()
-        self._comments = dict()
+
+        # Temporary comment (will be added to next entry)
         self._tmp_comment = ''
 
-        # current_dict points to the currently active config sub-dict
-        self._current_path = []
-        self._current = self._config
+        # Currently active path
+        self._active_path = tuple()
 
     @staticmethod
     def _check_key(key):
-        # if key.startswith('_'):
-        #    raise ValueError('Keys must not start with an underscore')
-        if '.' in key:
-            raise ValueError('Keys must not contain dots')
+        if not key:
+            raise ValueError('Key must not be empty.')
 
-    def _update_current(self):
-        self._current = self._config
-        for key in self._current_path:
-            self._current = self._current.setdefault(key, OrderedDict())
-
-    def define(self, key: str, default) -> Value:
+    def define(self, key: str, default) -> ConfigValue:
         self._check_key(key)
-        value = Value(default)
-        self._current[key] = value
-        self._add_comment(self._current_path + [key])
-        return value
+        npath = self._active_path + (key,)
+
+        if npath in self._config:
+            raise ValueError('Attempted to set existing entry at ' + str(npath))
+
+        cfg_value = ConfigValue(self._tmp_comment, default)
+        self._config[npath] = cfg_value
+        self._tmp_comment = ''
+        return cfg_value
 
     def comment(self, comment: str):
-        # Old method
-        # cid = self._current.setdefault('__cid', 0)
-        # self._current['_comment' + str(cid)] = comment
-        # self._current['__cid'] += 1
-
         self._tmp_comment = comment
-
-    def _add_comment(self, path):
-        if self._tmp_comment:
-            self._comments[tuple(path)] = self._tmp_comment
-            self._tmp_comment = ''
 
     def push(self, key: str):
         self._check_key(key)
-        self._current_path.append(key)
-        self._current = self._current.setdefault(key, OrderedDict())
-        self._add_comment(self._current_path)
+        self._active_path += (key,)
+
+        if self._active_path not in self._config:
+            self._config[self._active_path] = ConfigEntry(self._tmp_comment)
+        self._tmp_comment = ''
 
     def pop(self, n=1):
-        if n > len(self._current_path):
-            raise ValueError('Attempted to pop %d elements when whe only had %d' % (n, len(self._current_path)))
+        if n > len(self._active_path):
+            raise ValueError('Attempted to pop %d elements when whe only had %d' % (n, len(self._active_path)))
 
-        self._current_path = self._current_path[:-n]
-        self._update_current()
+        self._active_path = self._active_path[:-n]
 
     def build(self) -> Config:
         # Copy built config with all its values into the new Config object
         new_config = copy.deepcopy(self._config)
-        new_comments = copy.deepcopy(self._comments)
 
-        # Remove builtin values
-        # DictUtil.remove(new_config, lambda key, value: key.startswith('__'))
-
-        # Reorder, move dicts to the back
-        def reorder(d: OrderedDict):
-            dict_keys = []
-
-            for key, value in d.items():
-                if isinstance(value, OrderedDict):
-                    reorder(value)
-                    dict_keys.append(key)
-
-            for k in dict_keys:
-                d.move_to_end(k)
-
-        reorder(new_config)
-
-        return Config(new_config, new_comments)
+        return Config(new_config)
