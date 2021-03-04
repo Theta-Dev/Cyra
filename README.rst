@@ -16,6 +16,7 @@ Checklist (development)
 - Value fields (string, int, bool, enum, list, dict)
 - Infinite nesting
 - Comments
+- Override config via environment variables or other means
 - Load/generate config from file
 - Sphinx Autodoc
 
