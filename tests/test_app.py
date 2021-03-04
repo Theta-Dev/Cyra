@@ -1,6 +1,7 @@
 import unittest
 import os
 import shutil
+from collections import OrderedDict
 
 import tests
 import cyra
@@ -51,19 +52,16 @@ class Cfg:
     builder.pop(2)
 
     builder.comment('Arbitrary dictionary')
-    xdict = builder.define('DICT', {
-        'key1': 'V1',
-        'key2': 'V2',
-        'key3': 3,
-        'keyA': {
-            'keyA1': 'VA1',
-            'keyA2': True
-        },
-        'keyB': {
-            'keyB1': 'VB1',
-            'keyB2': ['VB2a', 'VB2b']
-        }
-    })
+
+    # Use ordered dict to keep same order between Python versions
+    _xdict = OrderedDict()
+    _xdict['key1'] = 'V1'
+    _xdict['key2'] = 'V2'
+    _xdict['key3'] = 3
+    _xdict['keyA'] = OrderedDict([('keyA1', 'VA1'), ('keyA2', True)])
+    _xdict['keyB'] = OrderedDict([('keyB1', 'VB1'), ('keyB2', ['VB2a', 'VB2b'])])
+
+    xdict = builder.define('DICT', _xdict)
 
     def __init__(self, cfg_file):
         self.cyraconf = Cfg.builder.build(cfg_file)

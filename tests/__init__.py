@@ -12,12 +12,12 @@ logging.basicConfig(level=logging.DEBUG)
 def clear_tmp_folder():
     try:
         shutil.rmtree(DIR_TMP)
-    except FileNotFoundError:
+    except Exception:
         pass
 
     try:
         os.makedirs(DIR_TMP)
-    except FileExistsError:
+    except Exception:
         pass
 
 

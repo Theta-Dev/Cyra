@@ -1,5 +1,7 @@
 import unittest
 import copy
+from collections import OrderedDict
+
 import tomlkit
 import os
 import shutil
@@ -23,10 +25,10 @@ class TestDictUtil(unittest.TestCase):
         }
 
     def test_iterate(self):
-        exp_res = [('key1', 'val1'), ('key2.1', 'val2.1'), ('key2.2', 'val2.2'), ('key3', 'val3'), ('__int', 'valInt')]
-        res = []
+        exp_res = {('key1', 'val1'), ('key2.1', 'val2.1'), ('key2.2', 'val2.2'), ('key3', 'val3'), ('__int', 'valInt')}
+        res = set()
 
-        cyra.core.DictUtil.iterate(self.d, lambda key, value: res.append((key, value)))
+        cyra.core.DictUtil.iterate(self.d, lambda key, value: res.add((key, value)))
         self.assertEqual(exp_res, res)
 
     def test_get_elememt(self):
@@ -171,19 +173,14 @@ keyB2 = ["VB2a", "VB2b"]
         builder.pop(2)
 
         builder.comment('Arbitrary dictionary')
-        builder.define('DICT', {
-            'key1': 'V1',
-            'key2': 'V2',
-            'key3': 3,
-            'keyA': {
-                'keyA1': 'VA1',
-                'keyA2': True
-            },
-            'keyB': {
-                'keyB1': 'VB1',
-                'keyB2': ['VB2a', 'VB2b']
-            }
-        })
+        # Use ordered dict to keep same order between Python versions
+        _xdict = OrderedDict()
+        _xdict['key1'] = 'V1'
+        _xdict['key2'] = 'V2'
+        _xdict['key3'] = 3
+        _xdict['keyA'] = OrderedDict([('keyA1', 'VA1'), ('keyA2', True)])
+        _xdict['keyB'] = OrderedDict([('keyB1', 'VB1'), ('keyB2', ['VB2a', 'VB2b'])])
+        builder.define('DICT', _xdict)
 
         cfg = builder.build('')
         self.assertEqual(exp_res, cfg.export_toml())
