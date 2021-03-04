@@ -12,11 +12,11 @@ values and annotated with helpful comments.
 
 Checklist (development)
 #######################
-- Config builder
-- Value fields (string, int, bool, enum, list, dict)
-- Infinite nesting
-- Comments
-- Override config via environment variables or other means
-- Load/generate config from file
-- Sphinx Autodoc
-
+- [X] Config builder
+- [X] Value fields (string, int, bool, list, dict)
+- [ ] Value verification
+- [X] Infinite nesting
+- [X] Comments
+- [X] Load/generate config from file
+- [X] Write config back to file
+- [ ] Sphinx Autodoc

@@ -1,6 +1,8 @@
 from typing import Optional, Dict, Tuple, Callable, Any
 from collections import OrderedDict
+import os
 import copy
+import logging
 import tomlkit
 from tomlkit.toml_document import TOMLDocument
 
@@ -39,7 +41,7 @@ class DictUtil:
         return None
 
     @staticmethod
-    def set_element(d, path, value, default_dict=None):  # type: (Dict, Tuple, Any, bool) -> None
+    def set_element(d, path, value, default_dict=None):  # type: (Dict, Tuple, Any, Optional[Dict]) -> None
         """
         Sets element in a nested dictionary, creating additional sub-dictionaries if necessary
         :param d: Dictionary
@@ -62,6 +64,11 @@ class DictUtil:
 class ConfigEntry:
     def __init__(self, comment=''):  # type: (str) -> None
         self.comment = comment
+        self._config = None
+
+    def set_modified(self):
+        if self._config and hasattr(self._config, 'set_modified'):
+            self._config.set_modified()
 
 
 class ConfigValue(ConfigEntry):
@@ -76,7 +83,15 @@ class ConfigValue(ConfigEntry):
 
     @val.setter
     def val(self, value):
-        self._val = type(self.default)(value)
+        """Auto-cast config value to specified type"""
+        nval = type(self.default)(value)
+        if nval != self._val:
+            self.set_modified()
+        # TODO value verification
+        self._val = nval
+
+    def __get__(self, instance, owner):
+        return self.val
 
     def __repr__(self):
         return repr(self.val)
@@ -90,6 +105,11 @@ class Config:
 
     def __init__(self, config):  # type: (OrderedDict[Tuple, ConfigEntry]) -> None
         self._config = config
+        self._modified = False
+        # TODO: add file attribute
+
+    def set_modified(self):
+        self._modified = True
 
     @staticmethod
     def _set_toml_entry(toml, path, entry):  # type: (TOMLDocument, Tuple, ConfigEntry) -> None
@@ -110,7 +130,11 @@ class Config:
 
             if entry.comment:
                 item.comment(entry.comment)
-            toml.add(path[0], item)
+
+            if toml.get(path[0]):
+                toml[path[0]] = item
+            else:
+                toml.add(path[0], item)
         else:
             if path[0] not in toml:
                 toml.add(path[0], tomlkit.table())
@@ -125,8 +149,8 @@ class Config:
 
         return tomlkit.dumps(toml)
 
-    def _load_dict(self, cfg_dict, wb_fun=None):  # type: (Dict, Optional[Callable[[Tuple, Any], None]]) -> int
-        n_writeback = 0
+    def _load_dict(self, cfg_dict):  # type: (Dict) -> None
+        modified = False
 
         for path in self._config.keys():
             entry = self._config[path]
@@ -138,32 +162,19 @@ class Config:
             # Import value if present in config dict
             if new_value is not None:
                 entry.val = new_value
+            else:
+                modified = True
 
-            # Insert default value to config dict if value is not present there
-            elif callable(wb_fun):
-                wb_fun(path, entry)
-                n_writeback += 1
-        return n_writeback
+        # If the imported dict covered the config spec completely,
+        # mark the config as non-modified. Otherwise there are default values
+        # that can be written back to the imported file
+        self._modified = modified
 
-    def load_dict(self, cfg_dict, writeback=False):  # type: (Dict, bool) -> int
-        return self._load_dict(cfg_dict,
-                               lambda path, entry:
-                               DictUtil.set_element(cfg_dict, path, entry.default) if writeback else None)
-
-    def load_toml(self, toml_str, writeback=False):  # type: (str, bool) -> Optional[str]
+    def load_toml(self, toml_str):  # type: (str) -> None
         toml = tomlkit.loads(toml_str)
+        self._load_dict(toml.value)
 
-        n_writeback = self._load_dict(toml.value,
-                                      lambda path, entry:
-                                      Config._set_toml_entry(toml, path, entry) if writeback else None)
-
-        if n_writeback:
-            print('Inserted %d new items into config file' % n_writeback)
-            return tomlkit.dumps(toml)
-
-    def load_flat_dict(self, flat_dict, writeback=False):  # type: (Dict, bool) -> int
-        n_writeback = 0
-
+    def load_flat_dict(self, flat_dict):  # type: (Dict) -> None
         for path in self._config.keys():
             entry = self._config[path]
             if not isinstance(entry, ConfigValue):
@@ -176,10 +187,42 @@ class Config:
 
             if new_value is not None:
                 entry.val = new_value
-            elif writeback:
-                flat_dict[path] = entry.default
-                n_writeback += 1
-        return n_writeback
+
+    def load_file(self, config_file, writeback=False):  # type: (str, bool) -> None
+        if os.path.isfile(config_file):
+            with open(config_file, 'r') as f:
+                toml_str = f.read()
+                self.load_toml(toml_str)
+        else:
+            self.set_modified()
+
+        # Write file if non existant or modified
+        if writeback:
+            self.save_file(config_file)
+
+    def export_toml(self, toml_str):  # type: (str) -> str
+        toml = tomlkit.loads(toml_str)
+
+        # For all config keys, check if they are already present in the config file
+        # If not, add them
+        for path in self._config.keys():
+            entry = self._config[path]
+            target_value = DictUtil.get_element(toml.value, path)
+
+            # Add value if missing
+            if target_value is None or (isinstance(entry, ConfigValue) and entry.val != target_value):
+                Config._set_toml_entry(toml, path, entry)
+
+        return tomlkit.dumps(toml)
+
+    def save_file(self, config_file):
+        toml_str = ''
+        if os.path.isfile(config_file):
+            with open(config_file, 'r') as f:
+                toml_str = f.read()
+
+        with open(config_file, 'w') as f:
+            f.write(self.export_toml(toml_str))
 
 
 class ConfigBuilder:
@@ -238,6 +281,11 @@ class ConfigBuilder:
 
     def build(self):  # type: () -> Config
         # Copy built config into the new Config object, but keep value references
-        new_config = copy.copy(self._config)
+        new_cfg_dict = copy.copy(self._config)
+        new_config = Config(new_cfg_dict)
 
-        return Config(new_config)
+        # Set config reference for all entries
+        for entry in new_cfg_dict.values():
+            entry._config = new_config
+
+        return new_config

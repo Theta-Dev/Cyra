@@ -1,9 +1,9 @@
-msg = "Hello World" # Cyra says hello
+msg = "Okay? Okay." # Are we okay?
 msg2 = "Bye bye, World" # Cyra says goodbye
 
 [DATABASE] # SQL Database settings
+password = "very_secret_password" # Dont tell anyone, right?
 server = "192.168.1.1" # DB server address
 port = 1443 # SQL port (default: 1443)
 username = "admin" # Credentials
-password = "my_secret_password"
 enable = true # DB connection enabled

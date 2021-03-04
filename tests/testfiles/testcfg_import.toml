@@ -1,0 +1,5 @@
+msg = "Okay? Okay." # Are we okay?
+msg2 = "Bye bye, World" # Cyra says goodbye
+
+[DATABASE] # SQL Database settings
+password = "very_secret_password" # Dont tell anyone, right?

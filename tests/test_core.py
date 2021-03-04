@@ -1,7 +1,10 @@
 import unittest
 import copy
 import tomlkit
+import os
+import shutil
 
+import tests
 import cyra
 import cyra.core
 
@@ -219,6 +222,12 @@ class TestConfigValue(unittest.TestCase):
         self.assertEqual("'256'", repr(cval))
         self.assertEqual('256', str(cval))
 
+    def test_config_value_get(self):
+        class Cfg:
+            OPT = cyra.core.ConfigValue('mycomment', 'val1')
+
+        self.assertEqual('val1', Cfg.OPT)
+
 
 class TestConfig(unittest.TestCase):
     def setUp(self) -> None:
@@ -266,29 +275,25 @@ class TestConfig(unittest.TestCase):
                 'password': 'very_secret_password'
             }
         }
-        exp_res = {'msg': 'Okay? Okay.',
-                   'DATABASE': {'password': 'very_secret_password', 'server': '192.168.1.1', 'port': 1443,
-                                'username': 'admin', 'enable': True}, 'msg2': 'Bye bye, World'}
 
-        cfg.load_dict(dic, True)
+        cfg._load_dict(dic)
 
-        self.assertEqual(exp_res, dic)
         self.assertEqual('Okay? Okay.', self.MSG.val)
         self.assertEqual('very_secret_password', self.PASSWORD.val)
 
-    def test_load_toml(self):
+    def test_load_export_toml(self):
         cfg = self.builder.build()
         toml_str = """
 msg = "Okay? Okay." # Are we ok?
 
-[DATABASE]
+[DATABASE] # SQL Database settings
 password = "very_secret_password"
 """
         exp_res = """
 msg = "Okay? Okay." # Are we ok?
 msg2 = "Bye bye, World" # Cyra says goodbye
 
-[DATABASE]
+[DATABASE] # SQL Database settings
 password = "very_secret_password"
 server = "192.168.1.1" # DB server address
 port = 1443 # SQL port (default: 1443)
@@ -300,8 +305,9 @@ enable = true # DB connection enabled
         self.assertEqual('Okay? Okay.', self.MSG.val)
         self.assertEqual('very_secret_password', self.PASSWORD.val)
 
-        new_toml_str = cfg.load_toml(toml_str, True)
-        self.assertEqual(exp_res, new_toml_str)
+        cfg.load_toml(toml_str)
+
+        self.assertEqual(exp_res, cfg.export_toml(toml_str))
 
     def test_load_flat_dict(self):
         cfg = self.builder.build()
@@ -309,18 +315,56 @@ enable = true # DB connection enabled
             ('msg',): 'Okay? Okay.',
             ('DATABASE', 'password'): 'very_secret_password'
         }
-        exp_res = {
-            ('msg',): 'Okay? Okay.',
-            ('DATABASE', 'password'): 'very_secret_password',
-            ('DATABASE', 'enable'): True,
-            ('DATABASE', 'port'): 1443,
-            ('DATABASE', 'server'): '192.168.1.1',
-            ('DATABASE', 'username'): 'admin',
-            ('msg2',): 'Bye bye, World'
-        }
 
-        cfg.load_flat_dict(flat_dict, True)
+        cfg.load_flat_dict(flat_dict)
 
-        self.assertEqual(exp_res, flat_dict)
         self.assertEqual('Okay? Okay.', self.MSG.val)
         self.assertEqual('very_secret_password', self.PASSWORD.val)
+
+    def test_load_file(self):
+        # Copy fresh config file into tmp folder
+        tests.clear_tmp_folder()
+        cfg_file = os.path.join(tests.DIR_TMP, 'testcfg.toml')
+        shutil.copyfile(os.path.join(tests.DIR_TESTFILES, 'testcfg_import.toml'), cfg_file)
+
+        cfg = self.builder.build()
+        cfg.load_file(cfg_file, True)
+
+        self.assertEqual('Okay? Okay.', self.MSG.val)
+        self.assertEqual('very_secret_password', self.PASSWORD.val)
+
+        tests.assert_files_equal(self, os.path.join(tests.DIR_TESTFILES, 'testcfg_writeback.toml'), cfg_file)
+
+    def test_gen_file(self):
+        tests.clear_tmp_folder()
+        cfg_file = os.path.join(tests.DIR_TMP, 'testcfg.toml')
+
+        cfg = self.builder.build()
+        cfg.load_file(cfg_file, True)
+
+        tests.assert_files_equal(self, os.path.join(tests.DIR_TESTFILES, 'testcfg.toml'), cfg_file)
+
+    def test_export_toml(self):
+        cfg = self.builder.build()
+
+        toml_str = """
+msg = "I am Cyra" # Hello, I am here
+"""
+        exp_res = """
+msg = "Okay? Okay." # Hello, I am here
+msg2 = "Bye bye, World" # Cyra says goodbye
+
+[DATABASE] # SQL Database settings
+server = "192.168.1.1" # DB server address
+port = 1443 # SQL port (default: 1443)
+username = "admin" # Credentials
+password = "very_secret_password"
+enable = false # DB connection enabled
+"""
+
+        self.MSG.val = 'Okay? Okay.'
+        self.PASSWORD.val = 'very_secret_password'
+        self.ENABLE.val = False
+
+        new_toml_str = cfg.export_toml(toml_str)
+        self.assertEqual(exp_res, new_toml_str)
