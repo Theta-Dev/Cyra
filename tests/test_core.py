@@ -89,7 +89,7 @@ enable = true # DB connection enabled
         builder.comment('Cyra says goodbye')
         builder.define('msg2', 'Bye bye, World')
 
-        cfg = builder.build()
+        cfg = builder.build('')
         self.assertEqual(exp_res, cfg.to_toml())
 
     def test_build_complex_config(self):
@@ -185,7 +185,7 @@ keyB2 = ["VB2a", "VB2b"]
             }
         })
 
-        cfg = builder.build()
+        cfg = builder.build('')
         self.assertEqual(exp_res, cfg.to_toml())
 
     def test_build_faulty_config(self):
@@ -268,7 +268,7 @@ class TestConfig(unittest.TestCase):
                           cyra.core.ConfigValue('Comment1', 'val1'))
 
     def test_load_dict(self):
-        cfg = self.builder.build()
+        cfg = self.builder.build('')
         dic = {
             'msg': 'Okay? Okay.',
             'DATABASE': {
@@ -282,7 +282,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual('very_secret_password', self.PASSWORD.val)
 
     def test_load_export_toml(self):
-        cfg = self.builder.build()
+        cfg = self.builder.build('')
         toml_str = """
 msg = "Okay? Okay." # Are we ok?
 
@@ -307,10 +307,10 @@ enable = true # DB connection enabled
 
         cfg.load_toml(toml_str)
 
-        self.assertEqual(exp_res, cfg.export_toml(toml_str))
+        self.assertEqual(exp_res, cfg.export_toml())
 
     def test_load_flat_dict(self):
-        cfg = self.builder.build()
+        cfg = self.builder.build('')
         flat_dict = {
             ('msg',): 'Okay? Okay.',
             ('DATABASE', 'password'): 'very_secret_password'
@@ -327,8 +327,8 @@ enable = true # DB connection enabled
         cfg_file = os.path.join(tests.DIR_TMP, 'testcfg.toml')
         shutil.copyfile(os.path.join(tests.DIR_TESTFILES, 'testcfg_import.toml'), cfg_file)
 
-        cfg = self.builder.build()
-        cfg.load_file(cfg_file, True)
+        cfg = self.builder.build(cfg_file)
+        cfg.load_file()
 
         self.assertEqual('Okay? Okay.', self.MSG.val)
         self.assertEqual('very_secret_password', self.PASSWORD.val)
@@ -339,13 +339,13 @@ enable = true # DB connection enabled
         tests.clear_tmp_folder()
         cfg_file = os.path.join(tests.DIR_TMP, 'testcfg.toml')
 
-        cfg = self.builder.build()
-        cfg.load_file(cfg_file, True)
+        cfg = self.builder.build(cfg_file)
+        cfg.load_file()
 
         tests.assert_files_equal(self, os.path.join(tests.DIR_TESTFILES, 'testcfg.toml'), cfg_file)
 
     def test_export_toml(self):
-        cfg = self.builder.build()
+        cfg = self.builder.build('')
 
         toml_str = """
 msg = "I am Cyra" # Hello, I am here
@@ -361,10 +361,11 @@ username = "admin" # Credentials
 password = "very_secret_password"
 enable = false # DB connection enabled
 """
+        cfg.load_toml(toml_str)
 
         self.MSG.val = 'Okay? Okay.'
         self.PASSWORD.val = 'very_secret_password'
         self.ENABLE.val = False
 
-        new_toml_str = cfg.export_toml(toml_str)
+        new_toml_str = cfg.export_toml()
         self.assertEqual(exp_res, new_toml_str)

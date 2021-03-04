@@ -101,12 +101,15 @@ class ConfigValue(ConfigEntry):
 
 
 class Config:
+    _toml: TOMLDocument
     _config: OrderedDict[Tuple, ConfigEntry]
 
-    def __init__(self, config):  # type: (OrderedDict[Tuple, ConfigEntry]) -> None
+    def __init__(self, config, file):  # type: (OrderedDict[Tuple, ConfigEntry], str) -> None
         self._config = config
         self._modified = False
-        # TODO: add file attribute
+
+        self._file = file
+        self._toml = tomlkit.document()
 
     def set_modified(self):
         self._modified = True
@@ -150,6 +153,7 @@ class Config:
         return tomlkit.dumps(toml)
 
     def _load_dict(self, cfg_dict):  # type: (Dict) -> None
+        n_values = 0
         modified = False
 
         for path in self._config.keys():
@@ -162,6 +166,7 @@ class Config:
             # Import value if present in config dict
             if new_value is not None:
                 entry.val = new_value
+                n_values += 1
             else:
                 modified = True
 
@@ -170,9 +175,11 @@ class Config:
         # that can be written back to the imported file
         self._modified = modified
 
+        logging.info('Cyra config loaded. %d values imported.' % n_values)
+
     def load_toml(self, toml_str):  # type: (str) -> None
-        toml = tomlkit.loads(toml_str)
-        self._load_dict(toml.value)
+        self._toml = tomlkit.loads(toml_str)
+        self._load_dict(self._toml.value)
 
     def load_flat_dict(self, flat_dict):  # type: (Dict) -> None
         for path in self._config.keys():
@@ -188,41 +195,38 @@ class Config:
             if new_value is not None:
                 entry.val = new_value
 
-    def load_file(self, config_file, writeback=False):  # type: (str, bool) -> None
-        if os.path.isfile(config_file):
-            with open(config_file, 'r') as f:
+    def load_file(self, update=True):  # type: (bool) -> None
+        if os.path.isfile(self._file):
+            logging.info('Cyra is reading your config from %s' % self._file)
+
+            with open(self._file, 'r') as f:
                 toml_str = f.read()
                 self.load_toml(toml_str)
         else:
             self.set_modified()
 
         # Write file if non existant or modified
-        if writeback:
-            self.save_file(config_file)
+        if update:
+            self.save_file()
 
-    def export_toml(self, toml_str):  # type: (str) -> str
-        toml = tomlkit.loads(toml_str)
-
+    def export_toml(self):  # type: () -> str
         # For all config keys, check if they are already present in the config file
         # If not, add them
         for path in self._config.keys():
             entry = self._config[path]
-            target_value = DictUtil.get_element(toml.value, path)
+            target_value = DictUtil.get_element(self._toml.value, path)
 
             # Add value if missing
             if target_value is None or (isinstance(entry, ConfigValue) and entry.val != target_value):
-                Config._set_toml_entry(toml, path, entry)
+                Config._set_toml_entry(self._toml, path, entry)
 
-        return tomlkit.dumps(toml)
+        return tomlkit.dumps(self._toml)
 
-    def save_file(self, config_file):
-        toml_str = ''
-        if os.path.isfile(config_file):
-            with open(config_file, 'r') as f:
-                toml_str = f.read()
+    def save_file(self):
+        logging.info('Cyra is writing your config to %s' % self._file)
 
-        with open(config_file, 'w') as f:
-            f.write(self.export_toml(toml_str))
+        with open(self._file, 'w') as f:
+            f.write(self.export_toml())
 
 
 class ConfigBuilder:
@@ -279,10 +283,10 @@ class ConfigBuilder:
 
         self._active_path = self._active_path[:-n]
 
-    def build(self):  # type: () -> Config
+    def build(self, cfg_file):  # type: (str) -> Config
         # Copy built config into the new Config object, but keep value references
         new_cfg_dict = copy.copy(self._config)
-        new_config = Config(new_cfg_dict)
+        new_config = Config(new_cfg_dict, cfg_file)
 
         # Set config reference for all entries
         for entry in new_cfg_dict.values():
