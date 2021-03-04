@@ -2,9 +2,9 @@
 tomlkit>=0.7.0,<1.0.0
 
 # Sphinx docs
-sphinx
-sphinx-autobuild
-sphinx_rtd_theme
+#sphinx
+#sphinx-autobuild
+#sphinx_rtd_theme
 
 # Testing
 importlib_resources

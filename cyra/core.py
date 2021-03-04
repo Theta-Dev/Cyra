@@ -104,10 +104,7 @@ class ConfigValue(ConfigEntry):
         return str(self.val)
 
 class Config:
-    _toml: TOMLDocument
-    _config: OrderedDict[Tuple, ConfigEntry]
-
-    def __init__(self, config, file):  # type: (OrderedDict[Tuple, ConfigEntry], str) -> None
+    def __init__(self, config, file):  # type: (OrderedDict, str) -> None
         self._config = config
         self._modified = False
 
@@ -260,8 +257,6 @@ class Config:
 
 class ConfigBuilder:
     """Use the ConfigBuilder to specify your configuration."""
-    _config: OrderedDict[Tuple, ConfigEntry]
-
     def __init__(self):
         # Config dict: Key(tuple) -> ConfigEntry
         self._config = OrderedDict()
