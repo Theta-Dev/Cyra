@@ -90,7 +90,7 @@ enable = true # DB connection enabled
         builder.define('msg2', 'Bye bye, World')
 
         cfg = builder.build('')
-        self.assertEqual(exp_res, cfg.to_toml())
+        self.assertEqual(exp_res, cfg.export_toml())
 
     def test_build_complex_config(self):
         exp_res = """msg = "Hello World" # Cyra says hello
@@ -186,7 +186,7 @@ keyB2 = ["VB2a", "VB2b"]
         })
 
         cfg = builder.build('')
-        self.assertEqual(exp_res, cfg.to_toml())
+        self.assertEqual(exp_res, cfg.export_toml())
 
     def test_build_faulty_config(self):
         builder = cyra.core.ConfigBuilder()
@@ -223,10 +223,19 @@ class TestConfigValue(unittest.TestCase):
         self.assertEqual('256', str(cval))
 
     def test_config_value_get(self):
+        tst_cfg = cyra.core.Config(None, '')
+
         class Cfg:
             OPT = cyra.core.ConfigValue('mycomment', 'val1')
+            OPT._config = tst_cfg
 
-        self.assertEqual('val1', Cfg.OPT)
+        cfg = Cfg()
+        self.assertEqual('val1', cfg.OPT)
+        self.assertFalse(tst_cfg._modified)
+
+        cfg.OPT = 'val2'
+        self.assertEqual('val2', cfg.OPT)
+        self.assertTrue(tst_cfg._modified)
 
 
 class TestConfig(unittest.TestCase):

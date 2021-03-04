@@ -1,0 +1,9 @@
+msg = "I am Cyra" # Hello, here I am
+
+[DATABASE] # SQL Database settings
+port = 1234 # SQL port (default: 1443)
+
+[SERVERS] # Servers to be monitored
+[SERVERS.beta]
+ip = "127.0.0.1" # Server IP address
+enable = true # Set to false to disable server access

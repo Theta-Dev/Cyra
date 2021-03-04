@@ -67,6 +67,7 @@ class ConfigEntry:
         self._config = None
 
     def set_modified(self):
+        """Sets the 'modified' flag in the associated config."""
         if self._config and hasattr(self._config, 'set_modified'):
             self._config.set_modified()
 
@@ -92,6 +93,9 @@ class ConfigValue(ConfigEntry):
 
     def __get__(self, instance, owner):
         return self.val
+
+    def __set__(self, instance, value):
+        self.val = value
 
     def __repr__(self):
         return repr(self.val)
@@ -134,25 +138,21 @@ class Config:
             if entry.comment:
                 item.comment(entry.comment)
 
-            if toml.get(path[0]):
-                toml[path[0]] = item
-            else:
+            if toml.get(path[0]) is None:
                 toml.add(path[0], item)
+            else:
+                toml[path[0]] = item
         else:
             if path[0] not in toml:
                 toml.add(path[0], tomlkit.table())
 
             Config._set_toml_entry(toml[path[0]], path[1:], entry)
 
-    def to_toml(self):  # type: () -> str
-        toml = tomlkit.document()
-
-        for path, entry in self._config.items():
-            Config._set_toml_entry(toml, path, entry)
-
-        return tomlkit.dumps(toml)
-
     def _load_dict(self, cfg_dict):  # type: (Dict) -> None
+        """
+        Imports config values from a nested dictionary
+        :param cfg_dict: Dictionary
+        """
         n_values = 0
         modified = False
 
@@ -178,10 +178,19 @@ class Config:
         logging.info('Cyra config loaded. %d values imported.' % n_values)
 
     def load_toml(self, toml_str):  # type: (str) -> None
+        """
+        Imports config values from a TOML string
+        :param toml_str: TOML string
+        """
         self._toml = tomlkit.loads(toml_str)
         self._load_dict(self._toml.value)
 
     def load_flat_dict(self, flat_dict):  # type: (Dict) -> None
+        """
+        Imports config values from a flat dictionary.
+        :param flat_dict: Flat dictionary.
+        Keys are either tuples or strings with dots as separators.
+        """
         for path in self._config.keys():
             entry = self._config[path]
             if not isinstance(entry, ConfigValue):
@@ -195,7 +204,31 @@ class Config:
             if new_value is not None:
                 entry.val = new_value
 
+    def export_toml(self):  # type: () -> str
+        """
+        Exports the configuration as a toml-formatted string.
+        Styling and comments of the imported toml file are preserved
+        :return: TOML string
+        """
+
+        # For all config keys, check if they are already present in the config file
+        # If not, add them
+        for path in self._config.keys():
+            entry = self._config[path]
+            target_value = DictUtil.get_element(self._toml.value, path)
+
+            # Add value if missing
+            if target_value is None or (isinstance(entry, ConfigValue) and entry.val != target_value):
+                Config._set_toml_entry(self._toml, path, entry)
+
+        return tomlkit.dumps(self._toml)
+
     def load_file(self, update=True):  # type: (bool) -> None
+        """
+        Loads the configuration from the file.
+        :param update: If set to true, config values missing in the file will be added automatically
+        with their default values and comments.
+        """
         if os.path.isfile(self._file):
             logging.info('Cyra is reading your config from %s' % self._file)
 
@@ -209,27 +242,25 @@ class Config:
         if update:
             self.save_file()
 
-    def export_toml(self):  # type: () -> str
-        # For all config keys, check if they are already present in the config file
-        # If not, add them
-        for path in self._config.keys():
-            entry = self._config[path]
-            target_value = DictUtil.get_element(self._toml.value, path)
+    def save_file(self, force=False):  # type: (bool) -> bool
+        """
+        If modified, saves the configuration to disk.
+        :param force: Force save, even if not modified.
+        :return: True if saved successfully.
+        """
+        if self._modified or force:
+            logging.info('Cyra is writing your config to %s' % self._file)
 
-            # Add value if missing
-            if target_value is None or (isinstance(entry, ConfigValue) and entry.val != target_value):
-                Config._set_toml_entry(self._toml, path, entry)
+            with open(self._file, 'w') as f:
+                f.write(self.export_toml())
 
-        return tomlkit.dumps(self._toml)
-
-    def save_file(self):
-        logging.info('Cyra is writing your config to %s' % self._file)
-
-        with open(self._file, 'w') as f:
-            f.write(self.export_toml())
+            self._modified = False
+            return True
+        return False
 
 
 class ConfigBuilder:
+    """Use the ConfigBuilder to specify your configuration."""
     _config: OrderedDict[Tuple, ConfigEntry]
 
     def __init__(self):
@@ -244,12 +275,24 @@ class ConfigBuilder:
 
     @staticmethod
     def _check_key(key):  # type: (str) -> None
+        """
+        Checks if the key has a valid format. Keys must not be empty or contain dots.
+        :param key: Key
+        :raise ValueError: if Key invalid
+        """
         if not key:
             raise ValueError('Key must not be empty.')
         if '.' in key:
             raise ValueError('Key must not contain dots.')
 
     def define(self, key, default):  # type: (str, Any) -> ConfigValue
+        """
+        Adds a value to your config.
+        :param key: Key for the new value. Must not be empty or contain dots.
+        :param default: Default value. Determines the type.
+        :raise ValueError: if the key collides with an existing config value/section
+        :return: ConfigValue
+        """
         self._check_key(key)
         npath = self._active_path + (key,)
 
@@ -262,9 +305,19 @@ class ConfigBuilder:
         return cfg_value
 
     def comment(self, comment):  # type: (str) -> None
+        """
+        Adds a comment to your config. Comment will be applied to the
+        value or section added next.
+        :param comment: Comment string
+        """
         self._tmp_comment = comment
 
     def push(self, key):  # type: (str) -> None
+        """
+        Adds a section to your config. Use ``pop()`` to exit the section.
+        :param key: Key for the new section. Must not be empty or contain dots.
+        :raise ValueError: if the key collides with an existing config value
+        """
         self._check_key(key)
         npath = self._active_path + (key,)
 
@@ -278,12 +331,22 @@ class ConfigBuilder:
         self._active_path = npath
 
     def pop(self, n=1):  # type: (int) -> None
+        """
+        Exits a config section created by ``push()``.
+        :param n: Number of sections to exit (default: 1)
+        :raise ValueError: if attempted to pop
+        """
         if n > len(self._active_path):
-            raise ValueError('Attempted to pop %d elements when whe only had %d' % (n, len(self._active_path)))
+            raise ValueError('Attempted to pop %d sections when whe only had %d' % (n, len(self._active_path)))
 
         self._active_path = self._active_path[:-n]
 
     def build(self, cfg_file):  # type: (str) -> Config
+        """
+        Creates a new Config object.
+        :param cfg_file: Config file path
+        :return: Config
+        """
         # Copy built config into the new Config object, but keep value references
         new_cfg_dict = copy.copy(self._config)
         new_config = Config(new_cfg_dict, cfg_file)
