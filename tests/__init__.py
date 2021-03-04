@@ -22,6 +22,8 @@ def clear_tmp_folder():
 
 
 def assert_files_equal(test, file1, file2):
+    test.maxDiff = None
+
     with open(file1, 'r') as f:
         c1 = f.read()
     with open(file2, 'r') as f:

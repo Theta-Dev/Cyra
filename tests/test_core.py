@@ -10,7 +10,7 @@ import cyra.core
 
 
 class TestDictUtil(unittest.TestCase):
-    def setUp(self) -> None:
+    def setUp(self):
         # Test dictionary
         self.d = {
             'key1': 'val1',
@@ -239,7 +239,7 @@ class TestConfigValue(unittest.TestCase):
 
 
 class TestConfig(unittest.TestCase):
-    def setUp(self) -> None:
+    def setUp(self):
         self.builder = cyra.core.ConfigBuilder()
 
         self.builder.comment('Cyra says hello')

@@ -70,7 +70,7 @@ class Cfg:
 
 
 class TestApplication(unittest.TestCase):
-    def setUp(self) -> None:
+    def setUp(self):
         tests.clear_tmp_folder()
         self.cfg_file = os.path.join(tests.DIR_TMP, 'appcfg.toml')
 
