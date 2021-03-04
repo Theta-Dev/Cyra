@@ -5,6 +5,7 @@ server = "192.168.1.1" # DB server address
 port = 1234 # SQL port (default: 1443)
 username = "admin" # Credentials
 password = "my_secret_password"
+enabled = true # DB connection enabled
 
 [SERVERS] # Servers to be monitored
 [SERVERS.alpha]

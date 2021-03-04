@@ -103,7 +103,6 @@ class ConfigValue(ConfigEntry):
     def __str__(self):
         return str(self.val)
 
-
 class Config:
     _toml: TOMLDocument
     _config: OrderedDict[Tuple, ConfigEntry]
@@ -352,7 +351,7 @@ class ConfigBuilder:
         new_config = Config(new_cfg_dict, cfg_file)
 
         # Set config reference for all entries
-        for entry in new_cfg_dict.values():
+        for __, entry in new_cfg_dict.items():
             entry._config = new_config
 
         return new_config

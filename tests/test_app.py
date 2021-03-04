@@ -22,6 +22,7 @@ class Cfg:
     user = builder.define('username', 'admin')
     pwd = builder.define('password', 'my_secret_password')
     builder.comment('DB connection enabled')
+    dben = builder.define('enabled', True)
     builder.pop()
 
     builder.comment('Servers to be monitored')
