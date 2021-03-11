@@ -7,7 +7,7 @@ import tests
 import cyra
 
 
-class Cfg(cyra.CyraConfig):
+class Cfg(cyra.Config):
     builder = cyra.ConfigBuilder()
 
     builder.comment('Cyra says hello')
@@ -64,7 +64,7 @@ class Cfg(cyra.CyraConfig):
     xdict = builder.define('DICT', _xdict)
 
     def __init__(self, cfg_file):
-        self.cyraconf = Cfg.builder.build(cfg_file)
+        super().__init__(self.builder, cfg_file)
 
 
 class TestApplication(unittest.TestCase):
@@ -74,14 +74,14 @@ class TestApplication(unittest.TestCase):
 
     def test_gen_file(self):
         cfg = Cfg(self.cfg_file)
-        cfg.cyraconf.load_file()
+        cfg.load_file()
         tests.assert_files_equal(self, os.path.join(tests.DIR_TESTFILES, 'appcfg.toml'), self.cfg_file)
 
     def test_load_config(self):
         shutil.copyfile(os.path.join(tests.DIR_TESTFILES, 'appcfg_import.toml'), self.cfg_file)
 
         cfg = Cfg(self.cfg_file)
-        cfg.cyraconf.load_file()
+        cfg.load_file()
 
         self.assertEqual('I am Cyra', cfg.msg)
         self.assertEqual(1234, cfg.port)
@@ -92,12 +92,12 @@ class TestApplication(unittest.TestCase):
         shutil.copyfile(os.path.join(tests.DIR_TESTFILES, 'appcfg.toml'), self.cfg_file)
 
         cfg = Cfg(self.cfg_file)
-        cfg.cyraconf.load_file()
+        cfg.load_file()
 
         cfg.msg = 'I am Cyra'
         cfg.port = 1234
         cfg.ip_b = '127.0.0.1'
         cfg.en_b = True
 
-        cfg.cyraconf.save_file()
+        cfg.save_file()
         tests.assert_files_equal(self, os.path.join(tests.DIR_TESTFILES, 'appcfg_modify.toml'), self.cfg_file)

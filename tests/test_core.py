@@ -91,7 +91,7 @@ enable = true # DB connection enabled
         builder.comment('Cyra says goodbye')
         builder.define('msg2', 'Bye bye, World')
 
-        cfg = builder.build('')
+        cfg = cyra.Config(builder, '')
         self.assertEqual(exp_res, cfg.export_toml())
 
     def test_build_complex_config(self):
@@ -182,7 +182,7 @@ keyB2 = ["VB2a", "VB2b"]
         _xdict['keyB'] = OrderedDict([('keyB1', 'VB1'), ('keyB2', ['VB2a', 'VB2b'])])
         builder.define('DICT', _xdict)
 
-        cfg = builder.build('')
+        cfg = cyra.Config(builder, '')
         self.assertEqual(exp_res, cfg.export_toml())
 
     def test_build_faulty_config(self):
@@ -216,7 +216,7 @@ class TestConfigValue(unittest.TestCase):
         self.assertEqual('256', cval.val)
 
 
-class Cfg(cyra.CyraConfig):
+class Cfg(cyra.Config):
     builder = cyra.core.ConfigBuilder()
 
     builder.comment('Cyra says hello')
@@ -269,7 +269,7 @@ class TestConfig(unittest.TestCase):
             }
         }
 
-        self.cfg.cyraconf._load_dict(dic)
+        self.cfg._load_dict(dic)
 
         self.assertEqual('Okay? Okay.', self.cfg.MSG)
         self.assertEqual('very_secret_password', self.cfg.PASSWORD)
@@ -292,14 +292,14 @@ port = 1443 # SQL port (default: 1443)
 username = "admin" # Credentials
 enable = true # DB connection enabled
 """
-        self.cfg.cyraconf.load_toml(toml_str)
+        self.cfg.load_toml(toml_str)
 
         self.assertEqual('Okay? Okay.', self.cfg.MSG)
         self.assertEqual('very_secret_password', self.cfg.PASSWORD)
 
-        self.cfg.cyraconf.load_toml(toml_str)
+        self.cfg.load_toml(toml_str)
 
-        self.assertEqual(exp_res, self.cfg.cyraconf.export_toml())
+        self.assertEqual(exp_res, self.cfg.export_toml())
 
     def test_load_flat_dict(self):
         flat_dict = {
@@ -307,7 +307,7 @@ enable = true # DB connection enabled
             ('DATABASE', 'password'): 'very_secret_password'
         }
 
-        self.cfg.cyraconf.load_flat_dict(flat_dict)
+        self.cfg.load_flat_dict(flat_dict)
 
         self.assertEqual('Okay? Okay.', self.cfg.MSG)
         self.assertEqual('very_secret_password', self.cfg.PASSWORD)
@@ -318,8 +318,8 @@ enable = true # DB connection enabled
         cfg_file = os.path.join(tests.DIR_TMP, 'testcfg.toml')
         shutil.copyfile(os.path.join(tests.DIR_TESTFILES, 'testcfg_import.toml'), cfg_file)
 
-        self.cfg.cyraconf._file = cfg_file
-        self.cfg.cyraconf.load_file()
+        self.cfg._file = cfg_file
+        self.cfg.load_file()
 
         self.assertEqual('Okay? Okay.', self.cfg.MSG)
         self.assertEqual('very_secret_password', self.cfg.PASSWORD)
@@ -330,8 +330,8 @@ enable = true # DB connection enabled
         tests.clear_tmp_folder()
         cfg_file = os.path.join(tests.DIR_TMP, 'testcfg.toml')
 
-        self.cfg.cyraconf._file = cfg_file
-        self.cfg.cyraconf.load_file()
+        self.cfg._file = cfg_file
+        self.cfg.load_file()
 
         tests.assert_files_equal(self, os.path.join(tests.DIR_TESTFILES, 'testcfg.toml'), cfg_file)
 
@@ -350,11 +350,11 @@ username = "admin" # Credentials
 password = "very_secret_password"
 enable = false # DB connection enabled
 """
-        self.cfg.cyraconf.load_toml(toml_str)
+        self.cfg.load_toml(toml_str)
 
         self.cfg.MSG = 'Okay? Okay.'
         self.cfg.PASSWORD = 'very_secret_password'
         self.cfg.ENABLE = False
 
-        new_toml_str = self.cfg.cyraconf.export_toml()
+        new_toml_str = self.cfg.export_toml()
         self.assertEqual(exp_res, new_toml_str)

@@ -64,12 +64,6 @@ class DictUtil:
 class ConfigEntry:
     def __init__(self, comment=''):  # type: (str) -> None
         self.comment = comment
-        self._config = None
-
-    def set_modified(self):
-        """Sets the 'modified' flag in the associated config."""
-        if self._config and hasattr(self._config, 'set_modified'):
-            self._config.set_modified()
 
 
 class ConfigValue(ConfigEntry):
@@ -87,26 +81,44 @@ class ConfigValue(ConfigEntry):
     def val(self, value):
         """Auto-cast config value to specified type"""
         nval = type(self.default)(value)
-        if nval != self._val:
-            self.set_modified()
         # TODO value verification
         self._val = nval
 
 
 class Config:
-    def __init__(self, config, file):  # type: (OrderedDict, str) -> None
-        self._config = config
+    def __init__(self, cfg_builder, file):  # type: (ConfigBuilder, str) -> None
+        # Copy builder config into the new Config object, with NEW value references
+        self._config = cfg_builder.build()
         self._config_by_id = dict()
-        self._modified = False
 
+        # Build id -> ConfigValue dict
+        for __, entry in self._config.items():
+            if isinstance(entry, ConfigValue):
+                self._config_by_id[entry.vid] = entry
+
+        self._modified = False
         self._file = file
         self._toml = tomlkit.document()
 
-    #def __getattr__(self, item):
-    #    pass
+    def __getattribute__(self, item):
+        obj = object.__getattribute__(self, item)
+        if isinstance(obj, ConfigValue):
+            vid = obj.vid
+            return self._config_by_id[vid].val
+        return obj
 
-    def set_modified(self):
-        self._modified = True
+    def __setattr__(self, key, value):
+        try:
+            obj = object.__getattribute__(self, key)
+
+            if isinstance(obj, ConfigValue):
+                vid = obj.vid
+                self._config_by_id[vid].val = value
+                self._modified = True
+            else:
+                object.__setattr__(self, key, value)
+        except AttributeError:
+            object.__setattr__(self, key, value)
 
     @staticmethod
     def _set_toml_entry(toml, path, entry):  # type: (TOMLDocument, Tuple, ConfigEntry) -> None
@@ -226,7 +238,7 @@ class Config:
                 toml_str = f.read()
                 self.load_toml(toml_str)
         else:
-            self.set_modified()
+            self._modified = True
 
         # Write file if non existant or modified
         if update:
@@ -333,51 +345,10 @@ class ConfigBuilder:
 
         self._active_path = self._active_path[:-n]
 
-    def build(self, cfg_file):  # type: (str) -> Config
+    def build(self):  # type: () -> OrderedDict
         """
-        Creates a new Config object.
-        :param cfg_file: Config file path
-        :return: Config
+        Returns a copy of the built config dict
+
+        :return: Built config
         """
-        # Copy built config into the new Config object, with NEW value references
-        new_cfg_dict = copy.deepcopy(self._config)
-        values_by_id = dict()
-
-        new_config = Config(new_cfg_dict, cfg_file)
-
-        # Set config reference for all entries
-        for __, entry in new_cfg_dict.items():
-            entry._config = new_config
-
-            if isinstance(entry, ConfigValue):
-                values_by_id[entry.vid] = entry
-
-        new_config._config_by_id = values_by_id
-
-        return new_config
-
-
-class CyraConfig:
-    """Base class for your configuration with Cyra"""
-
-    def __init__(self, cfg_builder, cfg_file):  # type: (ConfigBuilder, str) -> None
-        self.cyraconf = cfg_builder.build(cfg_file)
-
-    def __getattribute__(self, item):
-        obj = object.__getattribute__(self, item)
-        if isinstance(obj, ConfigValue):
-            vid = obj.vid
-            return self.cyraconf._config_by_id[vid].val
-        return obj
-
-    def __setattr__(self, key, value):
-        try:
-            obj = object.__getattribute__(self, key)
-
-            if isinstance(obj, ConfigValue):
-                vid = obj.vid
-                self.cyraconf._config_by_id[vid].val = value
-            else:
-                object.__setattr__(self, key, value)
-        except AttributeError:
-            object.__setattr__(self, key, value)
+        return copy.deepcopy(self._config)
