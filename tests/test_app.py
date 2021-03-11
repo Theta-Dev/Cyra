@@ -7,7 +7,7 @@ import tests
 import cyra
 
 
-class Cfg:
+class Cfg(cyra.CyraConfig):
     builder = cyra.ConfigBuilder()
 
     builder.comment('Cyra says hello')

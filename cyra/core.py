@@ -73,10 +73,11 @@ class ConfigEntry:
 
 
 class ConfigValue(ConfigEntry):
-    def __init__(self, comment='', default=''):  # type: (str, Any) -> None
+    def __init__(self, comment='', default='', vid=0):  # type: (str, Any, int) -> None
         super().__init__(comment)
         self.default = default
         self._val = default
+        self.vid = vid
 
     @property
     def val(self):
@@ -91,25 +92,18 @@ class ConfigValue(ConfigEntry):
         # TODO value verification
         self._val = nval
 
-    def __get__(self, instance, owner):
-        return self.val
-
-    def __set__(self, instance, value):
-        self.val = value
-
-    def __repr__(self):
-        return repr(self.val)
-
-    def __str__(self):
-        return str(self.val)
 
 class Config:
     def __init__(self, config, file):  # type: (OrderedDict, str) -> None
         self._config = config
+        self._config_by_id = dict()
         self._modified = False
 
         self._file = file
         self._toml = tomlkit.document()
+
+    #def __getattr__(self, item):
+    #    pass
 
     def set_modified(self):
         self._modified = True
@@ -257,6 +251,7 @@ class Config:
 
 class ConfigBuilder:
     """Use the ConfigBuilder to specify your configuration."""
+
     def __init__(self):
         # Config dict: Key(tuple) -> ConfigEntry
         self._config = OrderedDict()
@@ -266,6 +261,8 @@ class ConfigBuilder:
 
         # Currently active path
         self._active_path = tuple()
+
+        self._vid_count = 0
 
     @staticmethod
     def _check_key(key):  # type: (str) -> None
@@ -293,7 +290,8 @@ class ConfigBuilder:
         if npath in self._config:
             raise ValueError('Attempted to set existing entry at ' + str(npath))
 
-        cfg_value = ConfigValue(self._tmp_comment, default)
+        self._vid_count += 1
+        cfg_value = ConfigValue(self._tmp_comment, default, self._vid_count)
         self._config[npath] = cfg_value
         self._tmp_comment = ''
         return cfg_value
@@ -341,12 +339,45 @@ class ConfigBuilder:
         :param cfg_file: Config file path
         :return: Config
         """
-        # Copy built config into the new Config object, but keep value references
-        new_cfg_dict = copy.copy(self._config)
+        # Copy built config into the new Config object, with NEW value references
+        new_cfg_dict = copy.deepcopy(self._config)
+        values_by_id = dict()
+
         new_config = Config(new_cfg_dict, cfg_file)
 
         # Set config reference for all entries
         for __, entry in new_cfg_dict.items():
             entry._config = new_config
 
+            if isinstance(entry, ConfigValue):
+                values_by_id[entry.vid] = entry
+
+        new_config._config_by_id = values_by_id
+
         return new_config
+
+
+class CyraConfig:
+    """Base class for your configuration with Cyra"""
+
+    def __init__(self, cfg_builder, cfg_file):  # type: (ConfigBuilder, str) -> None
+        self.cyraconf = cfg_builder.build(cfg_file)
+
+    def __getattribute__(self, item):
+        obj = object.__getattribute__(self, item)
+        if isinstance(obj, ConfigValue):
+            vid = obj.vid
+            return self.cyraconf._config_by_id[vid].val
+        return obj
+
+    def __setattr__(self, key, value):
+        try:
+            obj = object.__getattribute__(self, key)
+
+            if isinstance(obj, ConfigValue):
+                vid = obj.vid
+                self.cyraconf._config_by_id[vid].val = value
+            else:
+                object.__setattr__(self, key, value)
+        except AttributeError:
+            object.__setattr__(self, key, value)
