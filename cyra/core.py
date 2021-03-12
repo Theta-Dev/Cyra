@@ -84,6 +84,12 @@ class ConfigValue(ConfigEntry):
         # TODO value verification
         self._val = nval
 
+    def __str__(self):
+        return str(self.val)
+
+    def __repr__(self):
+        return repr(self.val)
+
 
 class Config:
     def __init__(self, cfg_builder, file):  # type: (ConfigBuilder, str) -> None
