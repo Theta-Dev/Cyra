@@ -28,7 +28,7 @@ How to use
 
     import cyra
 
-    class Config:
+    class MyConfig(cyra.Config):
         builder = cyra.ConfigBuilder()
 
         builder.comment('Cyra says hello')
@@ -48,7 +48,21 @@ How to use
         builder.pop()
 
         def __init__(self, cfg_file):
-            self.cyraconf = Cfg.builder.build(cfg_file)
+            super().__init__(self.builder, cfg_file)
+
+How to access your config values:
+
+.. code-block:: python
+
+    >>> cfg = MyConfig('config.toml')
+    >>> cfg.load_file()
+
+    >>> cfg.msg
+    'Hello World'
+
+    >>> cfg.msg = 'Bye bye World'
+    >>> cfg.save_file()
+    True
 
 Here is the resulting config file:
 
