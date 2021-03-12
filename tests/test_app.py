@@ -101,3 +101,13 @@ class TestApplication(unittest.TestCase):
 
         cfg.save_file()
         tests.assert_files_equal(self, os.path.join(tests.DIR_TESTFILES, 'appcfg_modify.toml'), self.cfg_file)
+
+    def test_multiple_instances(self):
+        cfg1 = Cfg('')
+        cfg2 = Cfg('')
+
+        cfg1.msg = 'Cyra number one'
+        cfg2.msg = 'Cyra number two'
+
+        self.assertEqual('Cyra number one', cfg1.msg)
+        self.assertEqual('Cyra number two', cfg2.msg)
