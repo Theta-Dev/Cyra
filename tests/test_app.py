@@ -63,6 +63,9 @@ class Cfg(cyra.Config):
 
     xdict = builder.define('DICT', _xdict)
 
+    builder.comment('Value to be validated')
+    validatable = builder.define('validatable', 'fallback', lambda x: x != 'forbidden')
+
 
 class TestApplication(unittest.TestCase):
     def setUp(self):
@@ -108,3 +111,12 @@ class TestApplication(unittest.TestCase):
 
         self.assertEqual('Cyra number one', cfg1.msg)
         self.assertEqual('Cyra number two', cfg2.msg)
+
+    def test_validator(self):
+        cfg = Cfg('')
+
+        cfg.validatable = 'NewValue'
+        self.assertEqual('NewValue', cfg.validatable)
+
+        cfg.validatable = 'forbidden'
+        self.assertEqual('fallback', cfg.validatable)

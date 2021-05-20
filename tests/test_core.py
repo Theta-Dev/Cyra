@@ -204,7 +204,7 @@ keyB2 = ["VB2a", "VB2b"]
 class TestConfigValue(unittest.TestCase):
     def test_config_value(self):
         # Default value
-        cval = cyra.core.ConfigValue('mycomment', 'val1')
+        cval = cyra.core.ConfigValue('mycomment', 'val1', validator=lambda x: x != 'forbidden')
         self.assertEqual('val1', cval.val)
 
         # Modify value
@@ -214,6 +214,10 @@ class TestConfigValue(unittest.TestCase):
         # Value casting
         cval.val = 256
         self.assertEqual('256', cval.val)
+
+        # Forbidden value
+        cval.val = 'forbidden'
+        self.assertEqual('val1', cval.val)
 
 
 class Cfg(cyra.Config):

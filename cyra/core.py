@@ -67,17 +67,17 @@ class ConfigEntry:
 
 
 class ConfigValue(ConfigEntry):
-    def __init__(self, comment='', default='', vid=0, validator=None):  # type: (str, Any, int, Callable) -> None
+    def __init__(self, comment='', default='', path=tuple(), validator=None):  # type: (str, Any, Tuple, Callable) -> None
         """
         :param comment: Comment for cfg field
         :param default: Default value for cfg field
-        :param vid: Unique cfg field id
-        :param validator: Validation function
+        :param path: Cfg field path
+        :param validator: Validation function/lambda. Return true if valid value.
         """
         super().__init__(comment)
         self.default = default
         self._val = default
-        self.vid = vid
+        self.path = path
         self.validator = validator
 
     @property
@@ -90,8 +90,8 @@ class ConfigValue(ConfigEntry):
         nval = type(self.default)(value)
 
         if self.validator is not None and not self.validator(nval):
-            logging.error('Cyra config value %s for field %s is invalid. Falling back to default value.'
-                          % (str(nval), 'TODO'))
+            logging.error('Cyra config value %s for field [%s] is invalid. Falling back to default value %s.'
+                          % (repr(nval), '.'.join(self.path), repr(self.default)))
             self._val = self.default
         else:
             self._val = nval
@@ -116,8 +116,6 @@ class ConfigBuilder:
         # Currently active path
         self._active_path = tuple()
 
-        self._vid_count = 0
-
     @staticmethod
     def _check_key(key):  # type: (str) -> None
         """
@@ -130,11 +128,12 @@ class ConfigBuilder:
         if '.' in key:
             raise ValueError('Key must not contain dots.')
 
-    def define(self, key, default):  # type: (str, Any) -> ConfigValue
+    def define(self, key, default, validator=None):  # type: (str, Any, Callable) -> ConfigValue
         """
         Adds a value to your config.
         :param key: Key for the new value. Must not be empty or contain dots.
         :param default: Default value. Determines the type.
+        :param validator: Validation function/lambda. Return true if valid value.
         :raise ValueError: if the key collides with an existing config value/section
         :return: ConfigValue
         """
@@ -144,8 +143,7 @@ class ConfigBuilder:
         if npath in self._config:
             raise ValueError('Attempted to set existing entry at ' + str(npath))
 
-        self._vid_count += 1
-        cfg_value = ConfigValue(self._tmp_comment, default, self._vid_count)
+        cfg_value = ConfigValue(self._tmp_comment, default, npath, validator)
         self._config[npath] = cfg_value
         self._tmp_comment = ''
         return cfg_value
@@ -205,12 +203,6 @@ class Config:
 
         # Copy builder config into the new Config object, with NEW value references
         self._config = cfg_builder.build()
-        self._config_by_id = dict()
-
-        # Build id -> ConfigValue dict
-        for __, entry in self._config.items():
-            if isinstance(entry, ConfigValue):
-                self._config_by_id[entry.vid] = entry
 
         self._modified = False
         self._file = file
@@ -219,8 +211,7 @@ class Config:
     def __getattribute__(self, item):
         obj = object.__getattribute__(self, item)
         if isinstance(obj, ConfigValue):
-            vid = obj.vid
-            return self._config_by_id[vid].val
+            return self._config[obj.path].val
         return obj
 
     def __setattr__(self, key, value):
@@ -228,8 +219,7 @@ class Config:
             obj = object.__getattribute__(self, key)
 
             if isinstance(obj, ConfigValue):
-                vid = obj.vid
-                self._config_by_id[vid].val = value
+                self._config[obj.path].val = value
                 self._modified = True
             else:
                 object.__setattr__(self, key, value)
