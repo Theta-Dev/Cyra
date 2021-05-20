@@ -1,8 +1,9 @@
-from typing import Optional, Dict, Tuple, Callable, Any
+from typing import Optional, Dict, List, Tuple, Callable, Any
 from collections import OrderedDict
 import os
 import copy
 import logging
+import inspect
 import tomlkit
 from tomlkit.toml_document import TOMLDocument
 
@@ -13,7 +14,8 @@ class DictUtil:
     @staticmethod
     def iterate(d, fun):  # type: (Dict, Callable[[Any, Any], None]) -> None
         """
-        Iterates through a nested dictionary, calling the function ``fun`` on every key/value.
+        Iterate through a nested dictionary, calling the function ``fun`` on every key/value.
+
         :param d: Dictionary
         :param fun: Function/Lambda ``fun(key, value)``
         """
@@ -26,7 +28,8 @@ class DictUtil:
     @staticmethod
     def get_element(d, path):  # type: (Dict, Tuple) -> Any
         """
-        Gets element from a nested dictionary
+        Get element from a nested dictionary
+
         :param d: Dictionary
         :param path: Path tuple (for example ``('DATABASE', 'server')`` or ``('msg',)``
         :return: element or None
@@ -43,7 +46,8 @@ class DictUtil:
     @staticmethod
     def set_element(d, path, value, default_dict=None):  # type: (Dict, Tuple, Any, Optional[Dict]) -> None
         """
-        Sets element in a nested dictionary, creating additional sub-dictionaries if necessary
+        Set element in a nested dictionary, creating additional sub-dictionaries if necessary
+
         :param d: Dictionary
         :param path: Path tuple (for example ``('DATABASE', 'server')`` or ``('msg',)``
         :param value: Value to be set
@@ -62,19 +66,21 @@ class DictUtil:
 
 
 class ConfigEntry:
-    def __init__(self, comment=''):  # type: (str) -> None
+    def __init__(self, comment='', docstring=''):  # type: (str, str) -> None
         self.comment = comment
+        self.docstring = docstring
 
 
 class ConfigValue(ConfigEntry):
-    def __init__(self, comment='', default='', path=tuple(), validator=None):  # type: (str, Any, Tuple, Callable) -> None
+    def __init__(self, comment='', default='', path=tuple(), validator=None, docstring=''):
+        # type: (str, Any, Tuple, Callable, str) -> None
         """
         :param comment: Comment for cfg field
         :param default: Default value for cfg field
         :param path: Cfg field path
         :param validator: Validation function/lambda. Return true if valid value.
         """
-        super().__init__(comment)
+        super().__init__(comment, docstring)
         self.default = default
         self._val = default
         self.path = path
@@ -112,6 +118,7 @@ class ConfigBuilder:
 
         # Temporary comment (will be added to next entry)
         self._tmp_comment = ''
+        self._tmp_docstring = ''
 
         # Currently active path
         self._active_path = tuple()
@@ -119,7 +126,8 @@ class ConfigBuilder:
     @staticmethod
     def _check_key(key):  # type: (str) -> None
         """
-        Checks if the key has a valid format. Keys must not be empty or contain dots.
+        Check if the key has a valid format. Keys must not be empty or contain dots
+
         :param key: Key
         :raise ValueError: if Key invalid
         """
@@ -130,7 +138,8 @@ class ConfigBuilder:
 
     def define(self, key, default, validator=None):  # type: (str, Any, Callable) -> ConfigValue
         """
-        Adds a value to your config.
+        Add a value to your config.
+
         :param key: Key for the new value. Must not be empty or contain dots.
         :param default: Default value. Determines the type.
         :param validator: Validation function/lambda. Return true if valid value.
@@ -143,22 +152,37 @@ class ConfigBuilder:
         if npath in self._config:
             raise ValueError('Attempted to set existing entry at ' + str(npath))
 
-        cfg_value = ConfigValue(self._tmp_comment, default, npath, validator)
+        cfg_value = ConfigValue(self._tmp_comment, default, npath, validator, self._tmp_docstring)
         self._config[npath] = cfg_value
         self._tmp_comment = ''
+        self._tmp_docstring = ''
         return cfg_value
 
     def comment(self, comment):  # type: (str) -> None
         """
-        Adds a comment to your config. Comment will be applied to the
+        Add a comment to your config. Comment will be applied to the
         value or section added next.
+
         :param comment: Comment string
         """
         self._tmp_comment = comment
 
+    def docstring(self, docstring):  # type: (str) -> None
+        """
+        Add a docstring to your config.
+
+        When generating your documentation using the ``.. cyradoc::`` directive,
+        the config file will be split at this location and the docstring will be
+        inserted.
+
+        :param docstring: Docstring
+        """
+        self._tmp_docstring = inspect.cleandoc(docstring)
+
     def push(self, key):  # type: (str) -> None
         """
-        Adds a section to your config. Use ``pop()`` to exit the section.
+        Add a section to your config. Use ``pop()`` to exit the section.
+
         :param key: Key for the new section. Must not be empty or contain dots.
         :raise ValueError: if the key collides with an existing config value
         """
@@ -169,14 +193,16 @@ class ConfigBuilder:
             if isinstance(self._config[npath], ConfigValue):
                 raise ValueError('Attempted to push to existing entry at ' + str(npath))
         else:
-            self._config[npath] = ConfigEntry(self._tmp_comment)
+            self._config[npath] = ConfigEntry(self._tmp_comment, self._tmp_docstring)
 
         self._tmp_comment = ''
+        self._tmp_docstring = ''
         self._active_path = npath
 
     def pop(self, n=1):  # type: (int) -> None
         """
-        Exits a config section created by ``push()``.
+        Exit a config section created by ``push()``.
+
         :param n: Number of sections to exit (default: 1)
         :raise ValueError: if attempted to pop
         """
@@ -187,7 +213,7 @@ class ConfigBuilder:
 
     def build(self):  # type: () -> OrderedDict
         """
-        Returns a copy of the built config dict
+        Return a copy of the built config dict
 
         :return: Built config
         """
@@ -229,7 +255,8 @@ class Config:
     @staticmethod
     def _set_toml_entry(toml, path, entry):  # type: (TOMLDocument, Tuple, ConfigEntry) -> None
         """
-        Sets config entry in a TOML document, creating additional tables if necessary
+        Set config entry in a TOML document, creating additional tables if necessary
+
         :param toml: TOML document
         :param path: Path tuple (for example ``('DATABASE', 'server')`` or ``('msg',)``
         :param entry: New config entry
@@ -258,7 +285,8 @@ class Config:
 
     def _load_dict(self, cfg_dict):  # type: (Dict) -> None
         """
-        Imports config values from a nested dictionary
+        Import config values from a nested dictionary
+
         :param cfg_dict: Dictionary
         """
         n_values = 0
@@ -287,7 +315,8 @@ class Config:
 
     def load_toml(self, toml_str):  # type: (str) -> None
         """
-        Imports config values from a TOML string
+        Import config values from a TOML string
+
         :param toml_str: TOML string
         """
         self._toml = tomlkit.loads(toml_str)
@@ -295,7 +324,8 @@ class Config:
 
     def load_flat_dict(self, flat_dict):  # type: (Dict) -> None
         """
-        Imports config values from a flat dictionary.
+        Import config values from a flat dictionary.
+
         :param flat_dict: Flat dictionary.
         Keys are either tuples or strings with dots as separators.
         """
@@ -312,28 +342,41 @@ class Config:
             if new_value is not None:
                 entry.val = new_value
 
-    def export_toml(self):  # type: () -> str
+    @staticmethod
+    def _config_to_toml(config, document):  # type: (Dict[Tuple, ConfigEntry], TOMLDocument) -> str
         """
-        Exports the configuration as a toml-formatted string.
-        Styling and comments of the imported toml file are preserved
+        Write the configuration dict to a TOMLDocument and
+        output a toml-formatted string.
+
+        :param config: Config dict
+        :param document: TOMLDocument
         :return: TOML string
         """
-
         # For all config keys, check if they are already present in the config file
         # If not, add them
-        for path in self._config.keys():
-            entry = self._config[path]
-            target_value = DictUtil.get_element(self._toml.value, path)
+        for path in config.keys():
+            entry = config[path]
+            target_value = DictUtil.get_element(document.value, path)
 
             # Add value if missing
             if target_value is None or (isinstance(entry, ConfigValue) and entry.val != target_value):
-                Config._set_toml_entry(self._toml, path, entry)
+                Config._set_toml_entry(document, path, entry)
 
-        return tomlkit.dumps(self._toml)
+        return tomlkit.dumps(document)
+
+    def export_toml(self):  # type: () -> str
+        """
+        Export the configuration as a toml-formatted string.
+        Styling and comments of the imported toml file are preserved
+
+        :return: TOML string
+        """
+        return self._config_to_toml(self._config, self._toml)
 
     def load_file(self, update=True):  # type: (bool) -> None
         """
-        Loads the configuration from the file.
+        Load the configuration from the file.
+
         :param update: If set to true, config values missing in the file will be added automatically
         with their default values and comments.
         """
@@ -352,7 +395,8 @@ class Config:
 
     def save_file(self, force=False):  # type: (bool) -> bool
         """
-        If modified, saves the configuration to disk.
+        If modified, save the configuration to disk.
+
         :param force: Force save, even if not modified.
         :return: True if saved successfully.
         """
@@ -365,3 +409,25 @@ class Config:
             self._modified = False
             return True
         return False
+
+    def get_docblocks(self):  # type: () -> List[Tuple[str, str]]
+        """
+        Output the config data blockwise with the respective docstrings.
+
+        :return: List of tuples: (Docstring, TOML string)
+        """
+        docstring = inspect.getdoc(self)
+        result = []
+        buffer = OrderedDict()
+
+        for path, entry in self._config.items():
+            if entry.docstring:
+                result.append((docstring, self._config_to_toml(buffer, tomlkit.document())))
+
+                docstring = entry.docstring
+                buffer = OrderedDict()
+
+            buffer[path] = entry
+
+        result.append((docstring, self._config_to_toml(buffer, tomlkit.document())))
+        return result

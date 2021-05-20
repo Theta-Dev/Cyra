@@ -13,7 +13,7 @@ enabled = true # DB connection enabled
 ip = "10.0.0.1" # Server IP address
 enable = true # Set to false to disable server access
 priority = 1 # Server priority
-users = ["ThetaDev", "Cyra"] # Users to be handled
+users = ["ThetaDev", "Clary"] # Users to be handled
 
 [SERVERS.beta]
 ip = "10.0.0.2" # Server IP address

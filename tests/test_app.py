@@ -6,6 +6,9 @@ from collections import OrderedDict
 import tests
 import cyra
 
+# noinspection PyUnresolvedReferences
+from tests import tmpdir
+
 
 class Cfg(cyra.Config):
     builder = cyra.ConfigBuilder()
@@ -37,7 +40,7 @@ class Cfg(cyra.Config):
     builder.comment('Server priority')
     prio_a = builder.define('priority', 1)
     builder.comment('Users to be handled')
-    users_a = builder.define('users', ['ThetaDev', 'Cyra'])
+    users_a = builder.define('users', ['ThetaDev', 'Clary'])
     builder.pop()
 
     builder.push('beta')
@@ -69,8 +72,8 @@ class Cfg(cyra.Config):
 
 class TestApplication(unittest.TestCase):
     def setUp(self):
-        tests.clear_tmp_folder()
-        self.cfg_file = os.path.join(tests.DIR_TMP, 'appcfg.toml')
+        self.tmpdir = tests.tmpdir()
+        self.cfg_file = os.path.join(self.tmpdir.name, 'appcfg.toml')
 
     def test_gen_file(self):
         cfg = Cfg(self.cfg_file)

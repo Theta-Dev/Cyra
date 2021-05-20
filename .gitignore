@@ -1,8 +1,10 @@
 .idea
 venv
-/build
-/dist
+.tox
+build
+dist
 /*.egg-info
 tmp
 .coverage
-/htmlcov
+htmlcov
+_build

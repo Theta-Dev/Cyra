@@ -1,0 +1,3 @@
+coverage
+importlib_resources
+beautifulsoup4

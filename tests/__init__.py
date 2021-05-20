@@ -1,24 +1,17 @@
 import os
-import shutil
 import logging
+import tempfile
 from importlib_resources import files
 
 DIR_TESTFILES = str(files('tests.testfiles').joinpath(''))
+DIR_TESTDOCS = str(files('tests.testdocs').joinpath(''))
 DIR_TMP = os.path.join(DIR_TESTFILES, 'tmp')
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-def clear_tmp_folder():
-    try:
-        shutil.rmtree(DIR_TMP)
-    except Exception:
-        pass
-
-    try:
-        os.makedirs(DIR_TMP)
-    except Exception:
-        pass
+def tmpdir():
+    return tempfile.TemporaryDirectory()
 
 
 def assert_files_equal(test, file1, file2):

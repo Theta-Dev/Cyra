@@ -219,12 +219,19 @@ class TestConfigValue(unittest.TestCase):
         cval.val = 'forbidden'
         self.assertEqual('val1', cval.val)
 
+        self.assertEqual('val1', str(cval))
+        self.assertEqual(repr('val1'), repr(cval))
+
 
 class Cfg(cyra.Config):
+    """DSTRING: Begin"""
+
     builder = cyra.core.ConfigBuilder()
 
     builder.comment('Cyra says hello')
     MSG = builder.define('msg', 'Hello World')
+
+    builder.docstring('DSTRING: Database settings')
 
     builder.comment('SQL Database settings')
     builder.push('DATABASE')
@@ -238,6 +245,8 @@ class Cfg(cyra.Config):
     builder.comment('DB connection enabled')
     ENABLE = builder.define('enable', True)
     builder.pop()
+
+    builder.docstring('DSTRING: Goodbye')
 
     builder.comment('Cyra says goodbye')
     MSG2 = builder.define('msg2', 'Bye bye, World')
@@ -315,8 +324,8 @@ enable = true # DB connection enabled
 
     def test_load_file(self):
         # Copy fresh config file into tmp folder
-        tests.clear_tmp_folder()
-        cfg_file = os.path.join(tests.DIR_TMP, 'testcfg.toml')
+        self.tmpdir = tests.tmpdir()
+        cfg_file = os.path.join(self.tmpdir.name, 'testcfg.toml')
         shutil.copyfile(os.path.join(tests.DIR_TESTFILES, 'testcfg_import.toml'), cfg_file)
 
         self.cfg._file = cfg_file
@@ -328,8 +337,8 @@ enable = true # DB connection enabled
         tests.assert_files_equal(self, os.path.join(tests.DIR_TESTFILES, 'testcfg_writeback.toml'), cfg_file)
 
     def test_gen_file(self):
-        tests.clear_tmp_folder()
-        cfg_file = os.path.join(tests.DIR_TMP, 'testcfg.toml')
+        self.tmpdir = tests.tmpdir()
+        cfg_file = os.path.join(self.tmpdir.name, 'testcfg.toml')
 
         self.cfg._file = cfg_file
         self.cfg.load_file()
@@ -359,3 +368,29 @@ enable = false # DB connection enabled
 
         new_toml_str = self.cfg.export_toml()
         self.assertEqual(exp_res, new_toml_str)
+
+    def test_doc_blocks(self):
+        doc_blocks = self.cfg.get_docblocks()
+
+        docstrings = [
+            'DSTRING: Begin',
+            'DSTRING: Database settings',
+            'DSTRING: Goodbye',
+        ]
+
+        tomlstrings = [
+            'msg = "Hello World" # Cyra says hello',
+            '''
+[DATABASE] # SQL Database settings
+server = "192.168.1.1" # DB server address
+port = 1443 # SQL port (default: 1443)
+username = "admin" # Credentials
+password = "my_secret_password"
+enable = true # DB connection enabled
+            ''',
+            'msg2 = "Bye bye, World" # Cyra says goodbye',
+        ]
+
+        for i, b in enumerate(doc_blocks):
+            self.assertEqual(docstrings[i], b[0])
+            self.assertEqual(tomlstrings[i].strip(), b[1].strip())

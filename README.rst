@@ -10,16 +10,16 @@ The config can be read from and written to a toml file.
 If the config file does not exist, Cyra will generate a new one populated with initial
 values and annotated with helpful comments.
 
-Checklist (development)
+Features
 #######################
-- [X] Config builder
-- [X] Value fields (string, int, bool, list, dict)
-- [ ] Value verification
-- [X] Infinite nesting
-- [X] Comments
-- [X] Load/generate config from file
-- [X] Write config back to file
-- [ ] Sphinx Autodoc
+- Config builder
+- Value fields (string, int, bool, list, dict)
+- Value verification
+- Infinite nesting
+- Comments
+- Load/generate config from file
+- Write config back to file
+- Sphinx Autodoc
 
 How to use
 ##########
@@ -46,9 +46,6 @@ How to use
         builder.comment('DB connection enabled')
         dben = builder.define('enabled', True)
         builder.pop()
-
-        def __init__(self, cfg_file):
-            super().__init__(self.builder, cfg_file)
 
 How to access your config values:
 
