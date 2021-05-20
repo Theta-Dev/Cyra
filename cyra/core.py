@@ -67,11 +67,18 @@ class ConfigEntry:
 
 
 class ConfigValue(ConfigEntry):
-    def __init__(self, comment='', default='', vid=0):  # type: (str, Any, int) -> None
+    def __init__(self, comment='', default='', vid=0, validator=None):  # type: (str, Any, int, Callable) -> None
+        """
+        :param comment: Comment for cfg field
+        :param default: Default value for cfg field
+        :param vid: Unique cfg field id
+        :param validator: Validation function
+        """
         super().__init__(comment)
         self.default = default
         self._val = default
         self.vid = vid
+        self.validator = validator
 
     @property
     def val(self):
@@ -79,10 +86,15 @@ class ConfigValue(ConfigEntry):
 
     @val.setter
     def val(self, value):
-        """Auto-cast config value to specified type"""
+        """Auto-cast config value to specified type and validate it"""
         nval = type(self.default)(value)
-        # TODO value verification
-        self._val = nval
+
+        if self.validator is not None and not self.validator(nval):
+            logging.error('Cyra config value %s for field %s is invalid. Falling back to default value.'
+                          % (str(nval), 'TODO'))
+            self._val = self.default
+        else:
+            self._val = nval
 
     def __str__(self):
         return str(self.val)
@@ -91,8 +103,106 @@ class ConfigValue(ConfigEntry):
         return repr(self.val)
 
 
+class ConfigBuilder:
+    """Use the ConfigBuilder to specify your configuration."""
+
+    def __init__(self):
+        # Config dict: Key(tuple) -> ConfigEntry
+        self._config = OrderedDict()
+
+        # Temporary comment (will be added to next entry)
+        self._tmp_comment = ''
+
+        # Currently active path
+        self._active_path = tuple()
+
+        self._vid_count = 0
+
+    @staticmethod
+    def _check_key(key):  # type: (str) -> None
+        """
+        Checks if the key has a valid format. Keys must not be empty or contain dots.
+        :param key: Key
+        :raise ValueError: if Key invalid
+        """
+        if not key:
+            raise ValueError('Key must not be empty.')
+        if '.' in key:
+            raise ValueError('Key must not contain dots.')
+
+    def define(self, key, default):  # type: (str, Any) -> ConfigValue
+        """
+        Adds a value to your config.
+        :param key: Key for the new value. Must not be empty or contain dots.
+        :param default: Default value. Determines the type.
+        :raise ValueError: if the key collides with an existing config value/section
+        :return: ConfigValue
+        """
+        self._check_key(key)
+        npath = self._active_path + (key,)
+
+        if npath in self._config:
+            raise ValueError('Attempted to set existing entry at ' + str(npath))
+
+        self._vid_count += 1
+        cfg_value = ConfigValue(self._tmp_comment, default, self._vid_count)
+        self._config[npath] = cfg_value
+        self._tmp_comment = ''
+        return cfg_value
+
+    def comment(self, comment):  # type: (str) -> None
+        """
+        Adds a comment to your config. Comment will be applied to the
+        value or section added next.
+        :param comment: Comment string
+        """
+        self._tmp_comment = comment
+
+    def push(self, key):  # type: (str) -> None
+        """
+        Adds a section to your config. Use ``pop()`` to exit the section.
+        :param key: Key for the new section. Must not be empty or contain dots.
+        :raise ValueError: if the key collides with an existing config value
+        """
+        self._check_key(key)
+        npath = self._active_path + (key,)
+
+        if npath in self._config:
+            if isinstance(self._config[npath], ConfigValue):
+                raise ValueError('Attempted to push to existing entry at ' + str(npath))
+        else:
+            self._config[npath] = ConfigEntry(self._tmp_comment)
+
+        self._tmp_comment = ''
+        self._active_path = npath
+
+    def pop(self, n=1):  # type: (int) -> None
+        """
+        Exits a config section created by ``push()``.
+        :param n: Number of sections to exit (default: 1)
+        :raise ValueError: if attempted to pop
+        """
+        if n > len(self._active_path):
+            raise ValueError('Attempted to pop %d sections when whe only had %d' % (n, len(self._active_path)))
+
+        self._active_path = self._active_path[:-n]
+
+    def build(self):  # type: () -> OrderedDict
+        """
+        Returns a copy of the built config dict
+
+        :return: Built config
+        """
+        return copy.deepcopy(self._config)
+
+
 class Config:
-    def __init__(self, cfg_builder, file):  # type: (ConfigBuilder, str) -> None
+    builder = ConfigBuilder()
+
+    def __init__(self, file, cfg_builder=None):  # type: (str, ConfigBuilder) -> None
+        if cfg_builder is None:
+            cfg_builder = self.builder
+
         # Copy builder config into the new Config object, with NEW value references
         self._config = cfg_builder.build()
         self._config_by_id = dict()
@@ -265,96 +375,3 @@ class Config:
             self._modified = False
             return True
         return False
-
-
-class ConfigBuilder:
-    """Use the ConfigBuilder to specify your configuration."""
-
-    def __init__(self):
-        # Config dict: Key(tuple) -> ConfigEntry
-        self._config = OrderedDict()
-
-        # Temporary comment (will be added to next entry)
-        self._tmp_comment = ''
-
-        # Currently active path
-        self._active_path = tuple()
-
-        self._vid_count = 0
-
-    @staticmethod
-    def _check_key(key):  # type: (str) -> None
-        """
-        Checks if the key has a valid format. Keys must not be empty or contain dots.
-        :param key: Key
-        :raise ValueError: if Key invalid
-        """
-        if not key:
-            raise ValueError('Key must not be empty.')
-        if '.' in key:
-            raise ValueError('Key must not contain dots.')
-
-    def define(self, key, default):  # type: (str, Any) -> ConfigValue
-        """
-        Adds a value to your config.
-        :param key: Key for the new value. Must not be empty or contain dots.
-        :param default: Default value. Determines the type.
-        :raise ValueError: if the key collides with an existing config value/section
-        :return: ConfigValue
-        """
-        self._check_key(key)
-        npath = self._active_path + (key,)
-
-        if npath in self._config:
-            raise ValueError('Attempted to set existing entry at ' + str(npath))
-
-        self._vid_count += 1
-        cfg_value = ConfigValue(self._tmp_comment, default, self._vid_count)
-        self._config[npath] = cfg_value
-        self._tmp_comment = ''
-        return cfg_value
-
-    def comment(self, comment):  # type: (str) -> None
-        """
-        Adds a comment to your config. Comment will be applied to the
-        value or section added next.
-        :param comment: Comment string
-        """
-        self._tmp_comment = comment
-
-    def push(self, key):  # type: (str) -> None
-        """
-        Adds a section to your config. Use ``pop()`` to exit the section.
-        :param key: Key for the new section. Must not be empty or contain dots.
-        :raise ValueError: if the key collides with an existing config value
-        """
-        self._check_key(key)
-        npath = self._active_path + (key,)
-
-        if npath in self._config:
-            if isinstance(self._config[npath], ConfigValue):
-                raise ValueError('Attempted to push to existing entry at ' + str(npath))
-        else:
-            self._config[npath] = ConfigEntry(self._tmp_comment)
-
-        self._tmp_comment = ''
-        self._active_path = npath
-
-    def pop(self, n=1):  # type: (int) -> None
-        """
-        Exits a config section created by ``push()``.
-        :param n: Number of sections to exit (default: 1)
-        :raise ValueError: if attempted to pop
-        """
-        if n > len(self._active_path):
-            raise ValueError('Attempted to pop %d sections when whe only had %d' % (n, len(self._active_path)))
-
-        self._active_path = self._active_path[:-n]
-
-    def build(self):  # type: () -> OrderedDict
-        """
-        Returns a copy of the built config dict
-
-        :return: Built config
-        """
-        return copy.deepcopy(self._config)

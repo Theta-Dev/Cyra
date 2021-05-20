@@ -91,7 +91,7 @@ enable = true # DB connection enabled
         builder.comment('Cyra says goodbye')
         builder.define('msg2', 'Bye bye, World')
 
-        cfg = cyra.Config(builder, '')
+        cfg = cyra.Config('', builder)
         self.assertEqual(exp_res, cfg.export_toml())
 
     def test_build_complex_config(self):
@@ -182,7 +182,7 @@ keyB2 = ["VB2a", "VB2b"]
         _xdict['keyB'] = OrderedDict([('keyB1', 'VB1'), ('keyB2', ['VB2a', 'VB2b'])])
         builder.define('DICT', _xdict)
 
-        cfg = cyra.Config(builder, '')
+        cfg = cyra.Config('', builder)
         self.assertEqual(exp_res, cfg.export_toml())
 
     def test_build_faulty_config(self):
@@ -237,9 +237,6 @@ class Cfg(cyra.Config):
 
     builder.comment('Cyra says goodbye')
     MSG2 = builder.define('msg2', 'Bye bye, World')
-
-    def __init__(self, cfg_file):
-        super().__init__(self.builder, cfg_file)
 
 
 class TestConfig(unittest.TestCase):

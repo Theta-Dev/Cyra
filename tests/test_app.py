@@ -63,9 +63,6 @@ class Cfg(cyra.Config):
 
     xdict = builder.define('DICT', _xdict)
 
-    def __init__(self, cfg_file):
-        super().__init__(self.builder, cfg_file)
-
 
 class TestApplication(unittest.TestCase):
     def setUp(self):
