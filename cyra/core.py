@@ -329,7 +329,7 @@ class Config:
 
     builder = ConfigBuilder()
 
-    def __init__(self, file, cfg_builder=None):  # type: (str, ConfigBuilder) -> None
+    def __init__(self, file='config.toml', cfg_builder=None):  # type: (str, ConfigBuilder) -> None
         if cfg_builder is None:
             cfg_builder = self.builder
 
