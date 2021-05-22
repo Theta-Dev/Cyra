@@ -18,15 +18,13 @@ class CyradocDirective(Directive):
         'no-docstrings': directives.flag,
     }
 
-    def run(self):  # type: () -> List[nodes.Node]
-        location = self.state_machine.get_source_and_line(self.lineno)
-
-        cfg_path = self.arguments[0]
+    @staticmethod
+    def get_class(cfg_path, location):
         split_path = cfg_path.rsplit('.', 1)
 
         if len(split_path) != 2:
             logger.error('Cyradoc path must have the format <Module>.<Class>', location=location)
-            return []
+            return None
 
         modname, clsname = split_path
 
@@ -34,16 +32,27 @@ class CyradocDirective(Directive):
             mod = importlib.import_module(modname)
         except ModuleNotFoundError:
             logger.error('Cyradoc could not find module %s' % modname, location=location)
-            return []
+            return None
 
         try:
             config_cls = getattr(mod, clsname)
         except AttributeError:
-            logger.error('Cyradoc could not find class %s in module %s' % (clsname, modname), location=location)
-            return []
+            logger.error('Cyradoc could not find class %s in module %s'
+                         % (clsname, modname), location=location)
+            return None
 
         if not issubclass(config_cls, cyra.Config):
             logger.error('Class %s is not a Cyradoc class' % cfg_path, location=location)
+            return None
+
+        return config_cls
+
+    def run(self):  # type: () -> List[nodes.Node]
+        location = self.state_machine.get_source_and_line(self.lineno)
+        cfg_path = self.arguments[0]
+        config_cls = self.get_class(cfg_path, location)
+
+        if config_cls is None:
             return []
 
         config = config_cls('')

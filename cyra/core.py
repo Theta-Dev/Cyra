@@ -44,7 +44,8 @@ class DictUtil:
         return None
 
     @staticmethod
-    def set_element(d, path, value, default_dict=None):  # type: (Dict, Tuple, Any, Optional[Dict]) -> None
+    def set_element(d, path, value, default_dict=None):
+        # type: (Dict, Tuple, Any, Optional[Dict]) -> None
         """
         Set element in a nested dictionary, creating additional sub-dictionaries if necessary
 
@@ -90,7 +91,8 @@ class ConfigValue(ConfigEntry):
     Holds config value and handles validation.
     """
 
-    def __init__(self, comment='', docstring='', default='', path=tuple(), validator=None, hook=None, strict=False):
+    def __init__(self, comment='', docstring='', default='', path=tuple(),
+                 validator=None, hook=None, strict=False):
         # type: (str, str, Any, Tuple, Callable, Callable, bool) -> None
         """
         :param comment: Comment for cfg field
@@ -163,7 +165,8 @@ class ConfigValue(ConfigEntry):
             try:
                 return type(self._default)(value)
             except (TypeError, ValueError):
-                self._setter_error('could not be cast to (%s)' % type(self._default).__name__, value)
+                self._setter_error('could not be cast to (%s)'
+                                   % type(self._default).__name__, value)
                 return self._default
 
     def _validate(self, value):  # type: (Any) -> bool
@@ -306,7 +309,8 @@ class ConfigBuilder:
         :raise ValueError: if attempted to pop
         """
         if n > len(self._active_path):
-            raise ValueError('Attempted to pop %d sections when whe only had %d' % (n, len(self._active_path)))
+            raise ValueError('Attempted to pop %d sections when whe only had %d'
+                             % (n, len(self._active_path)))
 
         self._active_path = self._active_path[:-n]
 
@@ -461,7 +465,8 @@ class Config:
             target_value = DictUtil.get_element(document.value, path)
 
             # Add value if missing
-            if target_value is None or (isinstance(entry, ConfigValue) and entry._val != target_value):
+            if target_value is None or \
+               (isinstance(entry, ConfigValue) and entry._val != target_value):
                 Config._set_toml_entry(document, path, entry)
 
         return tomlkit.dumps(document)
