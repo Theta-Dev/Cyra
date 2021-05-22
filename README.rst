@@ -10,6 +10,9 @@ The config can be read from and written to a toml file.
 If the config file does not exist, Cyra will generate a new one populated with initial
 values and annotated with helpful comments.
 
+For a more detailed documentation, refer to
+https://cyra.rtfd.io 
+
 Features
 #######################
 - Config builder
