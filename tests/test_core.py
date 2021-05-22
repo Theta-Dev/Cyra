@@ -202,25 +202,68 @@ keyB2 = ["VB2a", "VB2b"]
 
 
 class TestConfigValue(unittest.TestCase):
-    def test_config_value(self):
-        # Default value
-        cval = cyra.core.ConfigValue('mycomment', 'val1', validator=lambda x: x != 'forbidden')
-        self.assertEqual('val1', cval.val)
+    def setUp(self):
+        self.cval = cyra.core.ConfigValue(default='val1', validator=lambda x: x != 'forbidden')
 
-        # Modify value
-        cval.val = 'val2'
-        self.assertEqual('val2', cval.val)
+    def test_default_value(self):
+        self.assertEqual('val1', self.cval._val)
 
-        # Value casting
-        cval.val = 256
-        self.assertEqual('256', cval.val)
+    def test_modify_value(self):
+        self.cval._val = 'val2'
+        self.assertEqual('val2', self.cval._val)
 
-        # Forbidden value
-        cval.val = 'forbidden'
-        self.assertEqual('val1', cval.val)
+    def test_value_casting(self):
+        self.cval._val = 256
+        self.assertEqual('256', self.cval._val)
 
-        self.assertEqual('val1', str(cval))
-        self.assertEqual(repr('val1'), repr(cval))
+    def test_value_casting_error(self):
+        intval = cyra.core.ConfigValue(default=16)
+        intval._val = 'hello'
+        self.assertEqual(16, intval._val)
+
+    def test_validator(self):
+        self.cval._val = 'forbidden'
+        self.assertEqual('val1', self.cval._val)
+
+        self.assertEqual('val1', str(self.cval))
+        self.assertEqual(repr('val1'), repr(self.cval))
+
+    def test_bad_validator(self):
+        self.assertRaises(ValueError, cyra.core.ConfigValue,
+                          default='forbidden', validator=lambda x: x != 'forbidden')
+
+    def test_strict(self):
+        strictval = cyra.core.ConfigValue(default='dval', strict=True)
+        strictval._val = 1
+        self.assertEqual('dval', strictval._val)
+
+    def test_hook(self):
+        def hook_function(val):
+            if val == 'straw':
+                return 'gold'
+            elif val == 'forbidden':
+                raise Exception
+            return val
+
+        hookval = cyra.core.ConfigValue(default='dval', hook=hook_function)
+
+        hookval._val = 'v1'
+        self.assertEqual('v1', hookval._val)
+
+        hookval._val = 'straw'
+        self.assertEqual('gold', hookval._val)
+
+        hookval._val = 'forbidden'
+        self.assertEqual('dval', hookval._val)
+
+    def test_bad_hook(self):
+        def hook_function(val):
+            if val == 'forbidden':
+                raise Exception
+            return val
+
+        self.assertRaises(ValueError, cyra.core.ConfigValue,
+                          default='forbidden', hook=hook_function)
 
 
 class Cfg(cyra.Config):
@@ -256,10 +299,14 @@ class TestConfig(unittest.TestCase):
     def setUp(self):
         self.cfg = Cfg('')
 
+    def tearDown(self):
+        if hasattr(self, 'tmpdir'):
+            self.tmpdir.cleanup()
+
     def test_set_toml_entry(self):
         toml = tomlkit.document()
-        cyra.core.Config._set_toml_entry(toml, ('key1',), cyra.core.ConfigValue('Comment1', 'val1'))
-        cyra.core.Config._set_toml_entry(toml, ('key2', 'key2.1'), cyra.core.ConfigValue('Comment2', 'val2'))
+        cyra.core.Config._set_toml_entry(toml, ('key1',), cyra.core.ConfigValue('Comment1', default='val1'))
+        cyra.core.Config._set_toml_entry(toml, ('key2', 'key2.1'), cyra.core.ConfigValue('Comment2', default='val2'))
 
         exp_res = """key1 = "val1" # Comment1
 
@@ -344,6 +391,15 @@ enable = true # DB connection enabled
         self.cfg.load_file()
 
         tests.assert_files_equal(self, os.path.join(tests.DIR_TESTFILES, 'testcfg.toml'), cfg_file)
+
+    def test_skip_file_gen(self):
+        self.tmpdir = tests.tmpdir()
+        cfg_file = os.path.join(self.tmpdir.name, 'testcfg.toml')
+
+        self.cfg._file = cfg_file
+        self.cfg.load_file(False)
+
+        self.assertFalse(os.path.isfile(cfg_file))
 
     def test_export_toml(self):
         toml_str = """

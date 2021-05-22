@@ -3,7 +3,11 @@ import cyra
 
 class Config(cyra.Config):
     """
-    Here is an example config to test the Cyradoc Sphinx extension.
+    Here I created a sample config class for a fictional application.
+
+    Using the ``.. cyradoc::`` Sphinx directive
+    a documented version of the config file can be inserted into
+    any Sphinx documentation.
     """
 
     builder = cyra.ConfigBuilder()
@@ -35,6 +39,11 @@ class Config(cyra.Config):
 
     builder.docstring('''
     Here you can add all the servers you want to observe.
+
+    **Example:**
+
+    - alpha
+    - beta
     ''')
 
     builder.comment('Servers to be monitored')
@@ -63,8 +72,7 @@ class Config(cyra.Config):
     builder.pop(2)
 
     builder.docstring('''
-    Arbitrary dictionaries can be config options, too.
-    To prevent errors in your program, using a validator is recommended
+    You can have arbitrary dictionaries as config options, too.
     ''')
     builder.comment('Arbitrary dictionary')
 

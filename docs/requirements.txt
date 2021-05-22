@@ -1,2 +1,5 @@
 sphinx==3.5.4
-furo
+sphinx-rtd-theme
+sphinx-autobuild
+sphinx-autodoc-typehints
+typed-ast

@@ -1,5 +1,7 @@
 msg = "I am Cyra" # Cyra says hello
 validatable = "fallback" # Value to be validated
+strictval = "fallback" # Strictly typed value
+hookval = "fallback" # Value with hook
 
 [DATABASE] # SQL Database settings
 server = "192.168.1.1" # DB server address

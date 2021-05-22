@@ -16,7 +16,7 @@ class DictUtil:
         """
         Iterate through a nested dictionary, calling the function ``fun`` on every key/value.
 
-        :param d: Dictionary
+        :param d: Nested dictionary
         :param fun: Function/Lambda ``fun(key, value)``
         """
         for key, value in d.items():
@@ -30,7 +30,7 @@ class DictUtil:
         """
         Get element from a nested dictionary
 
-        :param d: Dictionary
+        :param d: Nested dictionary
         :param path: Path tuple (for example ``('DATABASE', 'server')`` or ``('msg',)``
         :return: element or None
         :raise ValueError: if Path is empty
@@ -48,10 +48,11 @@ class DictUtil:
         """
         Set element in a nested dictionary, creating additional sub-dictionaries if necessary
 
-        :param d: Dictionary
+        :param d: Nested dictionary
         :param path: Path tuple (for example ``('DATABASE', 'server')`` or ``('msg',)``
         :param value: Value to be set
         :param default_dict: Empty dictionary to be created if missing
+        :raise ValueError: if Path is empty
         :raise ValueError: if Path is empty
         """
         if default_dict is None:
@@ -66,47 +67,141 @@ class DictUtil:
 
 
 class ConfigEntry:
+    """
+    Base class for config entries (both value-less nodes and ConfigValues).
+    Used as a data element for the config dictionary.
+
+    The base class holds comment and docstring.
+    """
+
     def __init__(self, comment='', docstring=''):  # type: (str, str) -> None
-        self.comment = comment
-        self.docstring = docstring
+        """
+        :param comment: Comment for cfg field
+        :param docstring: Docstring for cfg field
+        """
+        self._comment = comment
+        self._docstring = docstring
 
 
 class ConfigValue(ConfigEntry):
-    def __init__(self, comment='', default='', path=tuple(), validator=None, docstring=''):
-        # type: (str, Any, Tuple, Callable, str) -> None
+    """
+    Configuration value data element.
+
+    Holds config value and handles validation.
+    """
+
+    def __init__(self, comment='', docstring='', default='', path=tuple(), validator=None, hook=None, strict=False):
+        # type: (str, str, Any, Tuple, Callable, Callable, bool) -> None
         """
         :param comment: Comment for cfg field
+        :param docstring: Docstring for cfg field
         :param default: Default value for cfg field
         :param path: Cfg field path
         :param validator: Validation function/lambda. Return true if valid value.
+        :param hook: Hook function. Return modified value. Raise exception if invalid value.
+        :param strict: Disable auto-casting and fall back to default value if type does not match.
+
+        :raise ValueError: if the validator/hook does not accept the default value
         """
         super().__init__(comment, docstring)
-        self.default = default
-        self._val = default
-        self.path = path
-        self.validator = validator
+        self._default = default
+        self.__val = default
+        self._path = path
+        self._validator = validator
+        self._hook = hook
+        self._strict = strict
+
+        if not self._validate(self._default):
+            raise ValueError('Validator for field [%s] does not accept default value %s'
+                             % ('.'.join(self._path), repr(self._default)))
+
+        if not self._run_hook(self._default)[0]:
+            raise ValueError('Hook for field [%s] does not accept default value %s'
+                             % ('.'.join(self._path), repr(self._default)))
 
     @property
-    def val(self):
-        return self._val
+    def _val(self):
+        return self.__val
 
-    @val.setter
-    def val(self, value):
-        """Auto-cast config value to specified type and validate it"""
-        nval = type(self.default)(value)
+    @_val.setter
+    def _val(self, value):
+        """
+        Auto-cast config value to specified type and validate it.
 
-        if self.validator is not None and not self.validator(nval):
-            logging.error('Cyra config value %s for field [%s] is invalid. Falling back to default value %s.'
-                          % (repr(nval), '.'.join(self.path), repr(self.default)))
-            self._val = self.default
+        Log error and fall back to default value if any check did not pass.
+        """
+        cast_val = self._cast(value)
+        nval = cast_val
+
+        if not self._validate(nval):
+            self._setter_error('is invalid', cast_val)
+            nval = self._default
+
+        h_ok, nval = self._run_hook(nval)
+        if not h_ok:
+            self._setter_error('is invalid (hook)', cast_val)
+
+        self.__val = nval
+
+    def _cast(self, value):  # type: (Any) -> Any
+        """
+        Try to cast the input value to the type of the default value
+        (unless strict mode is enabled).
+
+        If the cast was not successful, log error and fall back to default value.
+
+        :param value: Raw input value
+        :return: Cast value / default value
+        """
+        if self._strict:
+            if isinstance(value, type(self._default)):
+                return value
+            else:
+                self._setter_error('is not of type (%s)' % type(self._default), value)
+                return self._default
         else:
-            self._val = nval
+            try:
+                return type(self._default)(value)
+            except (TypeError, ValueError):
+                self._setter_error('could not be cast to (%s)' % type(self._default).__name__, value)
+                return self._default
+
+    def _validate(self, value):  # type: (Any) -> bool
+        """
+        If specified, call the validator to check if the input value is valid.
+
+        :param value: Config value to pass to the validator
+        :return: is_valid
+        """
+        if self._validator is None:
+            return True
+        return self._validator(value)
+
+    def _run_hook(self, value):  # type: (Any) -> Tuple[bool, Any]
+        """
+        If specified, call the hook that can apply modifications to the config value.
+
+        :param value: Config value to pass to the hook
+        :return: Tuple: hook_ok (bool), new_value
+        """
+        if self._hook is None:
+            return True, value
+        # noinspection PyBroadException
+        try:
+            return True, self._hook(value)
+        except Exception:
+            return False, self._default
+
+    def _setter_error(self, msg, nval):  # type: (str, Any) -> None
+        """Print an error message if config value could not be set."""
+        logging.error('Cyra config value %s for field [%s] %s. Falling back to default value %s.'
+                      % (repr(nval), '.'.join(self._path), msg, repr(self._default)))
 
     def __str__(self):
-        return str(self.val)
+        return str(self._val)
 
     def __repr__(self):
-        return repr(self.val)
+        return repr(self._val)
 
 
 class ConfigBuilder:
@@ -136,14 +231,18 @@ class ConfigBuilder:
         if '.' in key:
             raise ValueError('Key must not contain dots.')
 
-    def define(self, key, default, validator=None):  # type: (str, Any, Callable) -> ConfigValue
+    def define(self, key, default, validator=None, hook=None, strict=False):
+        # type: (str, Any, Callable, Callable, bool) -> ConfigValue
         """
         Add a value to your config.
 
         :param key: Key for the new value. Must not be empty or contain dots.
         :param default: Default value. Determines the type.
         :param validator: Validation function/lambda. Return true if valid value.
+        :param hook: Hook function. Return modified value. Raise exception if invalid value.
+        :param strict: Disable auto-casting and fall back to default value if type does not match.
         :raise ValueError: if the key collides with an existing config value/section
+                           or the validator does not accept the default value
         :return: ConfigValue
         """
         self._check_key(key)
@@ -152,7 +251,8 @@ class ConfigBuilder:
         if npath in self._config:
             raise ValueError('Attempted to set existing entry at ' + str(npath))
 
-        cfg_value = ConfigValue(self._tmp_comment, default, npath, validator, self._tmp_docstring)
+        cfg_value = ConfigValue(self._tmp_comment, self._tmp_docstring, default, npath,
+                                validator, hook, strict)
         self._config[npath] = cfg_value
         self._tmp_comment = ''
         self._tmp_docstring = ''
@@ -190,8 +290,7 @@ class ConfigBuilder:
         npath = self._active_path + (key,)
 
         if npath in self._config:
-            if isinstance(self._config[npath], ConfigValue):
-                raise ValueError('Attempted to push to existing entry at ' + str(npath))
+            raise ValueError('Attempted to push to existing entry at ' + str(npath))
         else:
             self._config[npath] = ConfigEntry(self._tmp_comment, self._tmp_docstring)
 
@@ -220,7 +319,10 @@ class ConfigBuilder:
         return copy.deepcopy(self._config)
 
 
+# noinspection PyProtectedMember
 class Config:
+    """Cyra configuration class"""
+
     builder = ConfigBuilder()
 
     def __init__(self, file, cfg_builder=None):  # type: (str, ConfigBuilder) -> None
@@ -237,7 +339,7 @@ class Config:
     def __getattribute__(self, item):
         obj = object.__getattribute__(self, item)
         if isinstance(obj, ConfigValue):
-            return self._config[obj.path].val
+            return self._config[obj._path]._val
         return obj
 
     def __setattr__(self, key, value):
@@ -245,7 +347,7 @@ class Config:
             obj = object.__getattribute__(self, key)
 
             if isinstance(obj, ConfigValue):
-                self._config[obj.path].val = value
+                self._config[obj._path]._val = value
                 self._modified = True
             else:
                 object.__setattr__(self, key, value)
@@ -266,12 +368,12 @@ class Config:
             raise ValueError('Path length cant be 0')
         elif len(path) == 1:
             if isinstance(entry, ConfigValue):
-                item = tomlkit.item(entry.val)
+                item = tomlkit.item(entry._val)
             else:
                 item = tomlkit.table()
 
-            if entry.comment:
-                item.comment(entry.comment)
+            if entry._comment:
+                item.comment(entry._comment)
 
             if toml.get(path[0]) is None:
                 toml.add(path[0], item)
@@ -301,7 +403,7 @@ class Config:
 
             # Import value if present in config dict
             if new_value is not None:
-                entry.val = new_value
+                entry._val = new_value
                 n_values += 1
             else:
                 modified = True
@@ -327,7 +429,7 @@ class Config:
         Import config values from a flat dictionary.
 
         :param flat_dict: Flat dictionary.
-        Keys are either tuples or strings with dots as separators.
+                          Keys are either tuples or strings with dots as separators.
         """
         for path in self._config.keys():
             entry = self._config[path]
@@ -340,7 +442,7 @@ class Config:
                 new_value = flat_dict.get('.'.join(path))
 
             if new_value is not None:
-                entry.val = new_value
+                entry._val = new_value
 
     @staticmethod
     def _config_to_toml(config, document):  # type: (Dict[Tuple, ConfigEntry], TOMLDocument) -> str
@@ -359,7 +461,7 @@ class Config:
             target_value = DictUtil.get_element(document.value, path)
 
             # Add value if missing
-            if target_value is None or (isinstance(entry, ConfigValue) and entry.val != target_value):
+            if target_value is None or (isinstance(entry, ConfigValue) and entry._val != target_value):
                 Config._set_toml_entry(document, path, entry)
 
         return tomlkit.dumps(document)
@@ -378,7 +480,7 @@ class Config:
         Load the configuration from the file.
 
         :param update: If set to true, config values missing in the file will be added automatically
-        with their default values and comments.
+                       with their default values and comments.
         """
         if os.path.isfile(self._file):
             logging.info('Cyra is reading your config from %s' % self._file)
@@ -389,7 +491,7 @@ class Config:
         else:
             self._modified = True
 
-        # Write file if non existant or modified
+        # Write file if non existent or modified
         if update:
             self.save_file()
 
@@ -421,10 +523,10 @@ class Config:
         buffer = OrderedDict()
 
         for path, entry in self._config.items():
-            if entry.docstring:
+            if entry._docstring:
                 result.append((docstring, self._config_to_toml(buffer, tomlkit.document())))
 
-                docstring = entry.docstring
+                docstring = entry._docstring
                 buffer = OrderedDict()
 
             buffer[path] = entry

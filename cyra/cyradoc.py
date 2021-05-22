@@ -4,7 +4,7 @@ import importlib
 from sphinx.application import Sphinx
 from sphinx.util import logging
 from docutils import nodes
-from docutils.parsers.rst import Directive
+from docutils.parsers.rst import Directive, directives
 from docutils.statemachine import StringList
 
 import cyra
@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 class CyradocDirective(Directive):
     required_arguments = 1
+    option_spec = {
+        'no-docstrings': directives.flag,
+    }
 
     def run(self):  # type: () -> List[nodes.Node]
         location = self.state_machine.get_source_and_line(self.lineno)
@@ -36,8 +39,7 @@ class CyradocDirective(Directive):
         try:
             config_cls = getattr(mod, clsname)
         except AttributeError:
-            logger.error('Cyradoc could not find class %s in module %s' % (clsname, modname),
-                         location=location)
+            logger.error('Cyradoc could not find class %s in module %s' % (clsname, modname), location=location)
             return []
 
         if not issubclass(config_cls, cyra.Config):
@@ -47,19 +49,23 @@ class CyradocDirective(Directive):
         config = config_cls('')
         result = []
 
-        for docstring, toml in config.get_docblocks():
-            if docstring:
-                rst = StringList(docstring.split('\n'))
-                # Create a node.
-                node = nodes.option_string()
-                node.document = self.state.document
+        if 'no-docstrings' in self.options:
+            toml = config.export_toml()
+            result.append(nodes.literal_block(toml, toml))
+        else:
+            for docstring, toml in config.get_docblocks():
+                if docstring:
+                    rst = StringList(docstring.split('\n'))
+                    # Create a node.
+                    node = nodes.option_string()
+                    node.document = self.state.document
 
-                # Parse the rst.
-                self.state.nested_parse(rst, 0, node)
-                result.append(node)
+                    # Parse the rst.
+                    self.state.nested_parse(rst, 0, node)
+                    result.append(node)
 
-            if toml:
-                result.append(nodes.literal_block(toml, toml))
+                if toml:
+                    result.append(nodes.literal_block(toml, toml))
 
         return result
 

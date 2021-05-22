@@ -6,8 +6,13 @@ from collections import OrderedDict
 import tests
 import cyra
 
-# noinspection PyUnresolvedReferences
-from tests import tmpdir
+
+def hook_function(val):
+    if val == 'straw':
+        return 'gold'
+    elif val == 'forbidden':
+        raise Exception
+    return val
 
 
 class Cfg(cyra.Config):
@@ -69,11 +74,20 @@ class Cfg(cyra.Config):
     builder.comment('Value to be validated')
     validatable = builder.define('validatable', 'fallback', lambda x: x != 'forbidden')
 
+    builder.comment('Strictly typed value')
+    strictval = builder.define('strictval', 'fallback', strict=True)
+
+    builder.comment('Value with hook')
+    hookval = builder.define('hookval', 'fallback', hook=hook_function)
+
 
 class TestApplication(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tests.tmpdir()
         self.cfg_file = os.path.join(self.tmpdir.name, 'appcfg.toml')
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
 
     def test_gen_file(self):
         cfg = Cfg(self.cfg_file)
@@ -123,3 +137,21 @@ class TestApplication(unittest.TestCase):
 
         cfg.validatable = 'forbidden'
         self.assertEqual('fallback', cfg.validatable)
+
+    def test_strictval(self):
+        cfg = Cfg('')
+
+        cfg.strictval = 1
+        self.assertEqual('fallback', cfg.strictval)
+
+    def test_hook(self):
+        cfg = Cfg('')
+
+        cfg.hookval = 'v1'
+        self.assertEqual('v1', cfg.hookval)
+
+        cfg.hookval = 'straw'
+        self.assertEqual('gold', cfg.hookval)
+
+        cfg.hookval = 'forbidden'
+        self.assertEqual('fallback', cfg.hookval)

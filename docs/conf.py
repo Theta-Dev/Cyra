@@ -25,6 +25,8 @@ language = 'en'
 extensions = [
     'sphinx.ext.autosectionlabel',
     'sphinx.ext.autodoc',
+    'sphinx_autodoc_typehints',
+    'sphinx_rtd_theme',
     'cyra.cyradoc',
 ]
 
@@ -64,14 +66,9 @@ sys.path.append(os.path.abspath('.'))
 # a list of builtin themes.
 html_title = project
 
-html_theme = "furo"
+html_theme = "sphinx_rtd_theme"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
-
-# furo theming
-html_theme_options = {
-    "navigation_with_keys": True,
-}
