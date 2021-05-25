@@ -6,7 +6,7 @@ with open('README.rst') as f:
 
 setuptools.setup(
     name='Cyra',
-    version='1.0.0',
+    version='1.0.1',
     author='ThetaDev',
     description='Cyra is a simple config framework for Python.',
     long_description=README,
