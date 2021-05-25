@@ -19,7 +19,7 @@ class CyradocDirective(Directive):
     }
 
     @staticmethod
-    def get_class(cfg_path, location):
+    def _get_class(cfg_path, location):
         split_path = cfg_path.rsplit('.', 1)
 
         if len(split_path) != 2:
@@ -47,10 +47,16 @@ class CyradocDirective(Directive):
 
         return config_cls
 
+    @staticmethod
+    def _new_toml_block(toml):
+        literal = nodes.literal_block(toml, toml)
+        literal['language'] = 'toml'
+        return literal
+
     def run(self):  # type: () -> List[nodes.Node]
         location = self.state_machine.get_source_and_line(self.lineno)
         cfg_path = self.arguments[0]
-        config_cls = self.get_class(cfg_path, location)
+        config_cls = self._get_class(cfg_path, location)
 
         if config_cls is None:
             return []
@@ -60,7 +66,7 @@ class CyradocDirective(Directive):
 
         if 'no-docstrings' in self.options:
             toml = config.export_toml()
-            result.append(nodes.literal_block(toml, toml))
+            result.append(self._new_toml_block(toml))
         else:
             for docstring, toml in config.get_docblocks():
                 if docstring:
@@ -74,7 +80,7 @@ class CyradocDirective(Directive):
                     result.append(node)
 
                 if toml:
-                    result.append(nodes.literal_block(toml, toml))
+                    result.append(self._new_toml_block(toml))
 
         return result
 
