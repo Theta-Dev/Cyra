@@ -30,7 +30,7 @@ class CyradocDirective(Directive):
 
         try:
             mod = importlib.import_module(modname)
-        except ModuleNotFoundError:
+        except ImportError:
             logger.error('Cyradoc could not find module %s' % modname, location=location)
             return None
 

@@ -1,7 +1,11 @@
 import os
 import unittest
 import shutil
-from unittest.mock import patch
+
+try:
+    from unittest.mock import patch
+except ImportError:
+    from mock import patch
 
 from bs4 import BeautifulSoup
 from sphinx.testing.util import SphinxTestApp
@@ -9,6 +13,17 @@ from sphinx.testing.util import path as sphinx_path
 
 import tests
 from tests.test_core import Cfg
+import cyra
+
+
+class CfgEmptyDocblocks(cyra.Config):
+    def get_docblocks(self):
+        return [
+            ('MyDocstring', 'MyTOML'),
+            ('SomeDocstring', ''),
+            ('', 'SomeTOML'),
+            ('', ''),
+        ]
 
 
 class TestDocs(unittest.TestCase):
@@ -48,19 +63,26 @@ class TestDocs(unittest.TestCase):
 
     def parse_file(self, name):
         output_file = os.path.join(self.output_dir, name)
-        with open(output_file, 'r', encoding='utf-8') as f:
+
+        with open(output_file, 'r') as f:
             html_doc = f.read()
 
         soup = BeautifulSoup(html_doc, 'html.parser')
         return soup.find(role='main')
 
+    @staticmethod
+    def parse_body(body):
+        docstrings = []
+        for node in body.findAll(text=True):
+            if getattr(node.parent, 'name') != 'span' and node.strip():
+                docstrings.append(str(node).strip())
+
+        blocks = [n.getText().strip() for n in body.findAll('pre')]
+
+        return docstrings, blocks
+
     def test_cyradoc(self):
-        body = self.parse_file('index.html')
-
         exp_docstrings = ['DSTRING: Begin', 'DSTRING: Database settings', 'DSTRING: Goodbye']
-        docstrings = [n.getText() for n in body.findAll('p')]
-        self.assertEqual(exp_docstrings, docstrings)
-
         exp_blocks = [
             'msg = "Hello World" # Cyra says hello',
             '''[DATABASE] # SQL Database settings
@@ -71,7 +93,11 @@ password = "my_secret_password"
 enable = true # DB connection enabled''',
             'msg2 = "Bye bye, World" # Cyra says goodbye',
         ]
-        blocks = [n.getText().strip() for n in body.findAll('pre')]
+
+        body = self.parse_file('index.html')
+        docstrings, blocks = self.parse_body(body)
+
+        self.assertEqual(exp_docstrings, docstrings)
         self.assertEqual(exp_blocks, blocks)
 
     def test_no_docstrings(self):
@@ -87,3 +113,13 @@ enable = true # DB connection enabled''',
 
         content = body.getText().strip('\n')
         self.assertEqual('', content)
+
+    def test_empty_docblocks(self):
+        exp_docstrings = ['MyDocstring', 'SomeDocstring']
+        exp_blocks = ['MyTOML', 'SomeTOML']
+
+        body = self.parse_file('empty_docblocks.html')
+        docstrings, blocks = self.parse_body(body)
+
+        self.assertEqual(exp_docstrings, docstrings)
+        self.assertEqual(exp_blocks, blocks)

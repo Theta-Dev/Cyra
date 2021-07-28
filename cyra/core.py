@@ -8,7 +8,7 @@ import tomlkit
 from tomlkit.toml_document import TOMLDocument
 
 
-class DictUtil:
+class DictUtil(object):
     """A few useful functions for handling nested dicts"""
 
     @staticmethod
@@ -67,7 +67,7 @@ class DictUtil:
             DictUtil.set_element(d.setdefault(path[0], default_dict), path[1:], value, default_dict)
 
 
-class ConfigEntry:
+class ConfigEntry(object):
     """
     Base class for config entries (both value-less nodes and ConfigValues).
     Used as a data element for the config dictionary.
@@ -105,7 +105,7 @@ class ConfigValue(ConfigEntry):
 
         :raise ValueError: if the validator/hook does not accept the default value
         """
-        super().__init__(comment, docstring)
+        super(ConfigValue, self).__init__(comment, docstring)
         self._default = default
         self.__val = default
         self._path = path
@@ -207,7 +207,7 @@ class ConfigValue(ConfigEntry):
         return repr(self._val)
 
 
-class ConfigBuilder:
+class ConfigBuilder(object):
     """Use the ConfigBuilder to specify your configuration."""
 
     def __init__(self):
@@ -324,7 +324,7 @@ class ConfigBuilder:
 
 
 # noinspection PyProtectedMember
-class Config:
+class Config(object):
     """Cyra configuration class"""
 
     builder = ConfigBuilder()

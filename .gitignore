@@ -8,3 +8,5 @@ tmp
 .coverage
 htmlcov
 _build
+__pycache__
+*.pyc

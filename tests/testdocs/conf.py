@@ -12,3 +12,4 @@ source_suffix = '.rst'
 language = 'en'
 
 exclude_patterns = ['*/*']
+master_doc = 'index'

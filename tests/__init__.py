@@ -1,17 +1,22 @@
 import os
 import logging
-import tempfile
 from importlib_resources import files
 
-DIR_TESTFILES = str(files('tests.testfiles').joinpath(''))
-DIR_TESTDOCS = str(files('tests.testdocs').joinpath(''))
+try:
+    from tempfile import TemporaryDirectory
+except ImportError:
+    from backports.tempfile import TemporaryDirectory
+
+
+DIR_TESTFILES = str(files('tests').joinpath('testfiles'))
+DIR_TESTDOCS = str(files('tests').joinpath('testdocs'))
 DIR_TMP = os.path.join(DIR_TESTFILES, 'tmp')
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 def tmpdir():
-    return tempfile.TemporaryDirectory()
+    return TemporaryDirectory()
 
 
 def assert_files_equal(test, file1, file2):
